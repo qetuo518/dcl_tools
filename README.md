@@ -51,7 +51,7 @@ DCL安全工具是一款 Android 安全防护应用，主要功能包括：
 
 **问题**：旧版每0.5秒暴力写入 `enabled_accessibility_services`，会覆盖其他应用的无障碍服务。
 
-**解决方案**（参考 xtsafe-main）：
+**解决方案**：
 1. 先用 `AccessibilityManager` 检查服务是否真正运行
 2. 仅在掉线时写回，保留其他应用的服务
 3. 写回策略：清除自身残留 → 追加标准写法
@@ -159,6 +159,10 @@ String[] suspiciousPatterns = {
 | `moe.shizuku.manager.permission.API_V23` | Shizuku API |
 
 ---
+
+##致谢
+
+https://github.com/xiaote-xt/xtsafe 参考了进程守护，病毒扫描
 
 ## 技术栈
 
