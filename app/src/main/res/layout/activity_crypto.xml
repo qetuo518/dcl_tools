@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent"
+	android:orientation="vertical"
+	android:background="#F5F5F5">
+
+	<com.google.android.material.appbar.AppBarLayout
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar">
+
+		<androidx.appcompat.widget.Toolbar
+			android:id="@+id/toolbar"
+			android:layout_width="match_parent"
+			android:layout_height="?attr/actionBarSize"
+			android:title="加解密"
+			app:popupTheme="@style/ThemeOverlay.AppCompat.Light"/>
+
+	</com.google.android.material.appbar.AppBarLayout>
+
+	<ScrollView
+		android:layout_width="match_parent"
+		android:layout_height="match_parent"
+		android:fillViewport="true">
+
+		<LinearLayout
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:orientation="vertical"
+			android:padding="16dp">
+
+			<TextView
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="算法"
+				android:textSize="14sp"
+				android:textStyle="bold"
+				android:textColor="#212121"/>
+
+			<Spinner
+				android:id="@+id/sp_algo"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="8dp"
+				android:background="@drawable/card_bg"
+				android:padding="8dp"/>
+
+			<TextView
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="输入内容"
+				android:textSize="14sp"
+				android:textStyle="bold"
+				android:textColor="#212121"
+				android:layout_marginTop="16dp"/>
+
+			<EditText
+				android:id="@+id/et_input"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="8dp"
+				android:minLines="4"
+				android:gravity="top"
+				android:background="@drawable/card_bg"
+				android:padding="10dp"
+				android:hint="请输入要处理的内容"
+				android:textSize="14sp"/>
+
+			<TextView
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="密钥（AES/DES 需要）"
+				android:textSize="14sp"
+				android:textStyle="bold"
+				android:textColor="#212121"
+				android:layout_marginTop="16dp"/>
+
+			<EditText
+				android:id="@+id/et_key"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="8dp"
+				android:singleLine="true"
+				android:background="@drawable/card_bg"
+				android:padding="10dp"
+				android:hint="可留空，将自动生成"
+				android:textSize="14sp"/>
+
+			<LinearLayout
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:orientation="horizontal"
+				android:layout_marginTop="16dp">
+
+				<Button
+					android:id="@+id/btn_encrypt"
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:layout_weight="1"
+					android:text="加密"/>
+
+				<Button
+					android:id="@+id/btn_decrypt"
+					android:layout_width="0dp"
+					android:layout_height="wrap_content"
+					android:layout_weight="1"
+					android:layout_marginStart="8dp"
+					android:text="解密"/>
+
+			</LinearLayout>
+
+			<TextView
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="输出结果（长按可复制）"
+				android:textSize="14sp"
+				android:textStyle="bold"
+				android:textColor="#212121"
+				android:layout_marginTop="16dp"/>
+
+			<EditText
+				android:id="@+id/et_output"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:layout_marginTop="8dp"
+				android:minLines="4"
+				android:gravity="top"
+				android:background="@drawable/card_bg"
+				android:padding="10dp"
+				android:inputType="none"
+				android:textIsSelectable="true"
+				android:textSize="14sp"/>
+
+		</LinearLayout>
+
+	</ScrollView>
+
+</LinearLayout>

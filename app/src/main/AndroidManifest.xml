@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    package="dclnb.dcltools">
+
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"/>
+    <!-- 无障碍保活兜底闹钟（Doze 兼容） -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <!-- 请求忽略电池优化，提高常驻服务存活率 -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+    <!-- 悬浮窗权限（用于状态栏红条） -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+
+    <queries>
+        <package android:name="moe.shizuku.manager" />
+    </queries>
+
+    <application
+        android:name=".DclApp"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:theme="@style/AppTheme"
+        android:resizeableActivity="true"
+        android:persistent="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:label="@string/app_name">
+            <intent-filter>
+				<action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".ChatActivity"
+            android:label="聊天室"
+            android:exported="false"/>
+
+        <activity
+            android:name=".CryptoActivity"
+            android:label="加解密"
+            android:exported="false"/>
+
+        <activity
+            android:name=".ShellExecutorActivity"
+            android:label="Shell执行器"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize|stateAlwaysVisible"/>
+
+        <!-- 安全防护入口 -->
+        <activity
+            android:name=".SecurityActivity"
+            android:label="安全防护"
+            android:exported="false"
+            android:screenOrientation="portrait"/>
+
+        <!-- DCL安全护盾 -->
+        <activity
+            android:name=".DclaqActivity"
+            android:label="DCL安全护盾"
+            android:exported="false"
+            android:screenOrientation="portrait"/>
+
+        <!-- DCL工具（超级拦截） 仅显示 html -->
+        <activity
+            android:name=".DcltoolljActivity"
+            android:label="DCL工具 · 超级拦截"
+            android:exported="false"
+            android:screenOrientation="portrait"/>
+
+        <!-- 无障碍服务 -->
+        <service
+            android:name=".DclAccessibilityService"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <!-- 守护服务 -->
+        <service
+            android:name=".GuardService"
+            android:exported="false"
+            android:stopWithTask="false"/>
+
+        <!-- 核心常驻服务：不依赖无障碍，负责无障碍掉线兜底 -->
+        <service
+            android:name=".DclCoreService"
+            android:exported="false"
+            android:stopWithTask="false"/>
+
+        <!-- 保活兜底闹钟（系统调度，独立于服务进程存活） -->
+        <receiver
+            android:name=".DclKeepAliveReceiver"
+            android:exported="false"/>
+
+        <!-- 守护守护服务（每500ms检查所有组件，参照弑神者 GodCoreGuardianService） -->
+        <service
+            android:name=".DclGuardianService"
+            android:exported="false"
+            android:stopWithTask="false"/>
+
+        <!-- 重启守护服务（每5s检查核心服务并重起，参照弑神者 GodRestartService） -->
+        <service
+            android:name=".DclRestartService"
+            android:exported="false"
+            android:stopWithTask="false"/>
+
+        <!-- 独立进程守护（在主进程死亡时重启，参照弑神者 GodGuardianProcess） -->
+        <service
+            android:name=".DclGuardianProcess"
+            android:exported="false"
+            android:process=":dclguardian"
+            android:stopWithTask="false"/>
+
+        <!-- 摇一摇检测服务 -->
+        <service
+            android:name=".ShakeService"
+            android:exported="false"/>
+
+        <!-- 勒索病毒诱捕 -->
+        <activity
+            android:name=".RansomwareTrapActivity"
+            android:label="DCL勒索保护"
+            android:exported="false"
+            android:screenOrientation="portrait"/>
+
+        <service
+            android:name=".RansomwareTrapService"
+            android:exported="false"/>
+
+        <!-- 病毒检测 -->
+        <activity
+            android:name=".VirusScanActivity"
+            android:label="病毒检测"
+            android:exported="false"
+            android:screenOrientation="portrait"/>
+
+        <!-- 开机自启（BOOT_COMPLETED 属系统广播，Android 11+ 必须 exported=true 才收得到） -->
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Shizuku Provider -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:multiprocess="false"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+
+        <meta-data
+            android:name="moe.shizuku.client.V3_SUPPORT"
+            android:value="true" />
+
+      <meta-data
+          android:name="android.max_aspect"
+          android:value="4.0"/>
+
+      <!-- 聊天附件 FileProvider：下载文件通过 content:// URI 交给外部应用打开 -->
+      <provider
+          android:name="androidx.core.content.FileProvider"
+          android:authorities="${applicationId}.fileprovider"
+          android:exported="false"
+          android:grantUriPermissions="true">
+          <meta-data
+              android:name="android.support.FILE_PROVIDER_PATHS"
+              android:resource="@xml/file_paths" />
+      </provider>
+
+    </application>
+	
+</manifest>

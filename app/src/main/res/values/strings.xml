@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">DCL工具</string>
+    <string name="accessibility_service_description">DCL安全护盾无障碍服务，用于检测锁机应用和自动授权操作</string>
+    
+    <!-- 灵敏度选项 -->
+    <string-array name="sensitivity_options">
+        <item>轻摇</item>
+        <item>标准</item>
+        <item>用力</item>
+        <item>猛摇</item>
+    </string-array>
+    
+    <!-- 音量键选项 -->
+    <string-array name="volume_key_options">
+        <item>音量上键</item>
+        <item>音量下键</item>
+        <item>两者</item>
+    </string-array>
+    
+</resources>

@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>DCL工具 · 超级拦截</title>
+<style>
+  :root {
+    --bg: #0a0e14;
+    --panel: #11161e;
+    --ink: #e8eef6;
+    --cyan: #00e5c3;
+    --cyan-dark: #007a6a;
+    --violet: #6d5cff;
+    --violet-dark: #3a2fb8;
+    --muted: #6b7a8d;
+    --display: "Arial Black", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --serif: "Songti SC", "Noto Serif SC", "SimSun", serif;
+    --mono: "SFMono-Regular", "Cascadia Mono", Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--ink);
+    user-select: none;
+    cursor: pointer;
+  }
+
+  /* 细腻网格 + 扫描线 */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: .30;
+    background-image:
+      linear-gradient(rgba(0,229,195,.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,195,.045) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse at 50% 42%, #000 30%, transparent 78%);
+    -webkit-mask-image: radial-gradient(ellipse at 50% 42%, #000 30%, transparent 78%);
+  }
+
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 9;
+    pointer-events: none;
+    opacity: .05;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  #fx {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+  }
+
+  /* 氛围光晕，替换原来的晕影 */
+  .ambient {
+    position: fixed;
+    inset: 0;
+    z-index: 4;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 62% 48% at 50% 36%, rgba(0,229,195,.06), transparent 70%),
+      radial-gradient(ellipse 50% 40% at 72% 70%, rgba(109,92,255,.05), transparent 70%),
+      radial-gradient(ellipse at 50% 44%, transparent 36%, rgba(4,7,11,.55) 76%, rgba(4,7,11,.92) 100%);
+  }
+
+  header {
+    position: fixed;
+    z-index: 6;
+    top: max(22px, env(safe-area-inset-top));
+    left: 26px;
+    right: 26px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    color: rgba(232,238,246,.42);
+    font: 9px/1.6 var(--mono);
+    letter-spacing: .22em;
+    text-transform: uppercase;
+  }
+
+  header .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: rgba(232,238,246,.82);
+  }
+
+  header .brand::before {
+    content: "";
+    width: 9px;
+    height: 9px;
+    border: 1.5px solid var(--cyan);
+    border-radius: 50%;
+    box-shadow: 0 0 8px rgba(0,229,195,.55);
+  }
+
+  header .brand .sq {
+    width: 20px;
+    height: 2px;
+    background: linear-gradient(90deg, var(--cyan), transparent);
+  }
+
+  header .jp {
+    writing-mode: vertical-rl;
+    font-family: var(--serif);
+    font-size: 10px;
+    letter-spacing: .30em;
+    color: rgba(232,238,246,.30);
+    line-height: 1.6;
+  }
+
+  /* 顶部信号条：蓄力阶段出现 */
+  .signal {
+    position: fixed;
+    z-index: 7;
+    top: max(72px, calc(env(safe-area-inset-top) + 50px));
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--cyan);
+    font: 8px/1 var(--mono);
+    letter-spacing: .32em;
+    text-transform: uppercase;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .08s linear;
+    text-shadow: 0 0 10px rgba(0,229,195,.35);
+  }
+
+  .signal b {
+    color: rgba(232,238,246,.44);
+    font-weight: 400;
+    letter-spacing: .12em;
+  }
+
+  .signal::before,
+  .signal::after {
+    content: "";
+    width: 26px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(0,229,195,.55));
+  }
+
+  .signal::after {
+    transform: scaleX(-1);
+  }
+
+  /* 标题区 */
+  .title-center {
+    position: fixed;
+    z-index: 6;
+    left: 0;
+    right: 0;
+    top: 54%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    opacity: 0;
+    transform: translateY(-44%) scale(1.04);
+    transition: opacity .15s linear, transform .28s cubic-bezier(.18, .9, .2, 1);
+  }
+
+  .title-center.show {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+
+  .jp-side {
+    margin-bottom: 10px;
+    color: rgba(0,229,195,.72);
+    font: 9px/1.5 var(--mono);
+    letter-spacing: .46em;
+    text-transform: uppercase;
+    text-shadow: 0 0 12px rgba(0,229,195,.28);
+  }
+
+  h1 {
+    position: relative;
+    margin: 0;
+    font-family: var(--display);
+    font-size: clamp(64px, 19vw, 128px);
+    font-weight: 900;
+    line-height: .9;
+    letter-spacing: -.045em;
+    color: var(--ink);
+    text-shadow:
+      0 0 26px rgba(0,229,195,.24),
+      0 0 62px rgba(109,92,255,.16);
+  }
+
+  h1::after {
+    content: "";
+    position: absolute;
+    left: 8%;
+    right: 8%;
+    bottom: -12px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--cyan), var(--violet), transparent);
+    opacity: .75;
+  }
+
+  /* 底部信息卡 */
+  .meta {
+    position: fixed;
+    z-index: 6;
+    left: 6vw;
+    right: 6vw;
+    top: 72%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    opacity: 0;
+    transform: translateY(14px);
+    transition: opacity .18s linear, transform .26s cubic-bezier(.18, .9, .2, 1);
+  }
+
+  .meta.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .kicker {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    color: var(--cyan);
+    font: 9px/1 var(--mono);
+    letter-spacing: .34em;
+    text-transform: uppercase;
+  }
+
+  .kicker::before {
+    content: "";
+    width: 22px;
+    height: 2px;
+    background: var(--cyan);
+    box-shadow: 0 0 8px rgba(0,229,195,.55);
+  }
+
+  .sub {
+    color: rgba(232,238,246,.54);
+    font: 10px/1.8 var(--mono);
+    letter-spacing: .30em;
+    text-transform: uppercase;
+  }
+
+  .sub b { color: var(--cyan); font-weight: 400; }
+
+  .rule {
+    width: min(68%, 300px);
+    height: 1px;
+    margin-top: 16px;
+    background: linear-gradient(90deg, transparent, var(--violet), var(--cyan), transparent);
+    opacity: .8;
+  }
+
+  .reason {
+    margin: 12px 0 0;
+    color: rgba(232,238,246,.66);
+    font-family: var(--serif);
+    font-size: 14px;
+    line-height: 1.8;
+    letter-spacing: .06em;
+  }
+
+  .reason b {
+    font-weight: 400;
+    color: var(--ink);
+    background: linear-gradient(transparent 62%, rgba(0,229,195,.42) 62%);
+  }
+
+  footer {
+    position: fixed;
+    z-index: 6;
+    left: 26px;
+    right: 26px;
+    bottom: max(20px, env(safe-area-inset-bottom));
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: rgba(107,122,141,.55);
+    font: 8px/1 var(--mono);
+    letter-spacing: .20em;
+    text-transform: uppercase;
+  }
+
+  footer .live {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: rgba(232,238,246,.55);
+  }
+
+  footer .live::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--cyan);
+    box-shadow: 0 0 8px rgba(0,229,195,.8);
+    animation: pulse 1.7s ease-in-out infinite;
+  }
+
+  .replay {
+    border: 1px solid rgba(0,229,195,.22);
+    padding: 7px 14px;
+    background: transparent;
+    color: rgba(0,229,195,.72);
+    font: 8px/1 var(--mono);
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: background .15s, color .15s, border-color .15s;
+  }
+
+  .replay:hover {
+    background: rgba(0,229,195,.08);
+    border-color: rgba(0,229,195,.5);
+    color: var(--cyan);
+  }
+
+  @keyframes pulse {
+    0%, 55% { opacity: 1; transform: scale(1); }
+    56%, 100% { opacity: .18; transform: scale(.8); }
+  }
+
+  @media (max-height: 720px) {
+    h1 { font-size: clamp(52px, 14vw, 86px); }
+    .reason { font-size: 12px; }
+    .meta { top: auto; bottom: 9vh; }
+  }
+</style>
+</head>
+<body>
+  <canvas id="fx"></canvas>
+  <div class="ambient"></div>
+
+  <header>
+    <div class="brand"><span class="sq"></span>DCL / SUPER INTERCEPT</div>
+    <div class="jp">超 级 拦 截</div>
+  </header>
+
+  <div class="signal" id="signal">SIGNAL TRACE <b id="signalCode">0x000</b></div>
+
+  <div class="title-center" id="copy">
+    <div class="jp-side">Super Intercept</div>
+    <h1>超级拦截</h1>
+  </div>
+
+  <div class="meta" id="meta">
+    <div class="kicker">DCL Tool</div>
+    <div class="sub">THREAT <b>NEUTRALIZED</b> / CHAIN CUT</div>
+    <div class="rule"></div>
+    <p class="reason">恶意锁屏覆盖攻击已<b>拦截</b><br />控制链归零，系统恢复。</p>
+  </div>
+
+  <footer>
+    <div class="live">DCL 防护运行中</div>
+    <button class="replay" id="replay">REPLAY</button>
+  </footer>
+
+<script>
+(() => {
+  const canvas = document.getElementById('fx');
+  const ctx = canvas.getContext('2d');
+  const copy = document.getElementById('copy');
+  const meta = document.getElementById('meta');
+  const title = document.querySelector('.title-center h1');
+  const signalEl = document.getElementById('signal');
+  const signalCode = document.getElementById('signalCode');
+  const replay = document.getElementById('replay');
+  const glitchCanvas = document.createElement('canvas');
+  const glitchCtx = glitchCanvas.getContext('2d');
+  const params = new URLSearchParams(location.search);
+  let STILL = params.has('still') || params.has('poster');
+  const STILL_T = parseFloat(params.get('t') || '3.25');
+
+  const TAU = Math.PI * 2;
+  const INK = [232, 238, 246];
+  const CYAN = [0, 229, 195];
+  const VIOLET = [109, 92, 255];
+  const MUTED = [107, 122, 141];
+
+  const LOOP = 5.3;
+  const IMPACT = 2.35;
+
+  let W = 0, H = 0, DPR = 1, CX = 0, CY = 0, R = 0;
+  let start = performance.now();
+  let burstSeeds = [];
+  let dust = [];
+  let running = false;
+
+  const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+  const clamp01 = v => Math.min(1, Math.max(0, v));
+  const easeOut = v => 1 - Math.pow(1 - v, 3);
+  const easeInOut = v => v < 0.5 ? 2 * v * v : 1 - Math.pow(-2 * v + 2, 2) / 2;
+  const rand01 = n => {
+    const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+    return x - Math.floor(x);
+  };
+
+  function glitchAmount(t) {
+    if (t < 0.55 || t > IMPACT - 0.06) return 0;
+    const build = clamp01((t - 0.55) / 1.35);
+    const pulse = Math.pow(Math.max(0, Math.sin((t - 0.55) * 10.5)), 8);
+    const late = clamp01((t - (IMPACT - 0.52)) / 0.42);
+    return Math.min(1, build * 0.30 + pulse * 0.44 + late * 0.74);
+  }
+
+  function applyScreenGlitch(t, glitch) {
+    if (glitch < 0.06) return;
+
+    const cw = canvas.width;
+    const ch = canvas.height;
+
+    glitchCtx.setTransform(1, 0, 0, 1, 0, 0);
+    glitchCtx.clearRect(0, 0, cw, ch);
+    glitchCtx.drawImage(canvas, 0, 0);
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, cw, ch);
+
+    const slices = 18;
+    const sliceH = Math.ceil(ch / slices);
+    for (let i = 0; i < slices; i++) {
+      const y = i * sliceH;
+      const skip = rand01(i * 9.1 + Math.floor(t * 28)) < glitch * 0.20;
+      if (skip) continue;
+      const shift = (rand01(i * 3.7 + Math.floor(t * 31)) - 0.5) * glitch * 68 * DPR;
+      ctx.drawImage(glitchCanvas, 0, y, cw, sliceH, shift, y, cw, sliceH);
+
+      if (rand01(i * 7.3 + Math.floor(t * 23)) < glitch * 0.16) {
+        ctx.fillStyle = i % 3 === 0
+          ? `rgba(0,229,195,${0.13 * glitch})`
+          : `rgba(109,92,255,${0.10 * glitch})`;
+        ctx.fillRect(0, y, cw, Math.max(1, sliceH * 0.22));
+      }
+    }
+
+    ctx.restore();
+
+    // RGB 分离残影
+    ctx.save();
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.globalCompositeOperation = 'screen';
+    ctx.globalAlpha = 0.075 * glitch;
+    ctx.drawImage(glitchCanvas, 5 * glitch, 0, W, H);
+    ctx.globalAlpha = 0.050 * glitch;
+    ctx.drawImage(glitchCanvas, -5 * glitch, 0, W, H);
+    ctx.restore();
+
+    // 扫描线 + 噪点块
+    ctx.save();
+    const scanY = ((t * 0.62) % 1) * H;
+    const scan = ctx.createLinearGradient(0, scanY - 2, 0, scanY + 2);
+    scan.addColorStop(0, 'rgba(232,238,246,0)');
+    scan.addColorStop(0.5, `rgba(0,229,195,${0.10 * glitch})`);
+    scan.addColorStop(1, 'rgba(232,238,246,0)');
+    ctx.fillStyle = scan;
+    ctx.fillRect(0, scanY - 2, W, 4);
+
+    const blocks = Math.round(6 + glitch * 8);
+    for (let i = 0; i < blocks; i++) {
+      const r = i + Math.floor(t * 30) * 17;
+      const x = rand01(r * 5.3) * W;
+      const y = rand01(r * 8.7) * H;
+      const w = 8 + rand01(r * 3.1) * 62;
+      const h = 1 + rand01(r * 4.9) * 3;
+      ctx.fillStyle = rand01(r * 2.2) < 0.32
+        ? `rgba(0,229,195,${0.10 * glitch})`
+        : `rgba(232,238,246,${0.08 * glitch})`;
+      ctx.fillRect(x, y, w, h);
+    }
+    ctx.restore();
+  }
+
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2.5);
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = Math.floor(W * DPR);
+    canvas.height = Math.floor(H * DPR);
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+    glitchCanvas.width = canvas.width;
+    glitchCanvas.height = canvas.height;
+    glitchCtx.setTransform(1, 0, 0, 1, 0, 0);
+
+    CX = W * 0.5;
+    CY = H * (H < 720 ? 0.32 : 0.335);
+    R = Math.min(W, H) * (H < 720 ? 0.245 : 0.265);
+
+    burstSeeds = Array.from({ length: 72 }, (_, i) => {
+      const a = (i * 2.399963) % TAU;
+      return {
+        a,
+        speed: 0.22 + ((i * 37) % 100) / 100 * 2.4,
+        size: 0.5 + ((i * 13) % 100) / 100 * 2.0,
+        accent: i % 4 === 0,
+        streak: i % 5 === 0,
+        delay: ((i * 7) % 100) / 100 * 0.12,
+      };
+    });
+
+    dust = Array.from({ length: 52 }, () => ({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      r: Math.random() * 1.1 + 0.2,
+      a: 0.02 + Math.random() * 0.09,
+    }));
+  }
+
+  function reset() {
+    start = performance.now();
+    if (!STILL && !running) {
+      running = true;
+      requestAnimationFrame(frame);
+    }
+  }
+
+  function drawBackground(t) {
+    ctx.fillStyle = '#0a0e14';
+    ctx.fillRect(0, 0, W, H);
+
+    const wash = ctx.createRadialGradient(CX, CY, R * 0.12, CX, CY, R * 2.5);
+    wash.addColorStop(0, 'rgba(0,229,195,.055)');
+    wash.addColorStop(0.5, 'rgba(109,92,255,.035)');
+    wash.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = wash;
+    ctx.fillRect(0, 0, W, H);
+
+    for (const d of dust) {
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, d.r, 0, TAU);
+      ctx.fillStyle = rgba(INK, d.a);
+      ctx.fill();
+    }
+
+    // 斜向低对比光带
+    ctx.save();
+    ctx.translate(CX, CY);
+    ctx.rotate(-0.54);
+    const band = ctx.createLinearGradient(-W, 0, W, 0);
+    band.addColorStop(0, 'rgba(0,0,0,0)');
+    band.addColorStop(0.45, 'rgba(0,0,0,.22)');
+    band.addColorStop(0.5, 'rgba(0,229,195,.04)');
+    band.addColorStop(0.55, 'rgba(0,0,0,.22)');
+    band.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = band;
+    ctx.fillRect(-W, -R * 0.9, W * 2, R * 1.8);
+    ctx.restore();
+  }
+
+  function drawSun(t, intro, charge, after) {
+    const radius = R * (0.56 + 0.10 * intro + 0.28 * charge + 0.08 * after);
+    const glow = ctx.createRadialGradient(CX, CY, 0, CX, CY, radius * 1.6);
+    glow.addColorStop(0, 'rgba(0,229,195,.16)');
+    glow.addColorStop(0.4, 'rgba(109,92,255,.12)');
+    glow.addColorStop(0.78, 'rgba(8,20,26,.06)');
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(CX, CY, radius * 1.6, 0, TAU);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(CX, CY, radius, 0, TAU);
+    ctx.fillStyle = 'rgba(10,22,30,.62)';
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(CX, CY, radius * .985, 0, TAU);
+    ctx.lineWidth = 1.1;
+    ctx.strokeStyle = 'rgba(0,229,195,.18)';
+    ctx.stroke();
+  }
+
+  function drawSpeedLines(t, charge, after) {
+    const burst = Math.max(charge * 0.7, after * 0.4);
+    if (burst <= 0) return;
+    ctx.save();
+    ctx.translate(CX, CY);
+    for (let i = 0; i < 96; i++) {
+      const a = (i / 96) * TAU + (i % 2 ? 0.007 : 0);
+      const inner = R * (1.30 + ((i * 17) % 100) / 100 * 0.2);
+      const outer = inner + R * (0.5 + ((i * 29) % 100) / 100 * 1.6) * burst;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * inner, Math.sin(a) * inner);
+      ctx.lineTo(Math.cos(a) * outer, Math.sin(a) * outer);
+      ctx.lineWidth = i % 9 === 0 ? 1.8 : 0.55;
+      ctx.strokeStyle = i % 9 === 0
+        ? rgba(CYAN, 0.17 * burst)
+        : rgba(INK, 0.07 * burst);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function starPath(ctx, cx, cy, outer, inner, rotation) {
+    ctx.beginPath();
+    for (let i = 0; i < 12; i++) {
+      const a = rotation + (i * TAU) / 12 - Math.PI / 2;
+      const rr = i % 2 === 0 ? outer : inner;
+      const x = cx + Math.cos(a) * rr;
+      const y = cy + Math.sin(a) * rr;
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.closePath();
+  }
+
+  function trianglePath(ctx, cx, cy, radius, rotation) {
+    ctx.beginPath();
+    for (let i = 0; i < 3; i++) {
+      const a = rotation + (i * TAU) / 3 - Math.PI / 2;
+      const x = cx + Math.cos(a) * radius;
+      const y = cy + Math.sin(a) * radius;
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.closePath();
+  }
+
+  function drawRings(t, intro, charge, after) {
+    const spin = t * 0.18 + charge * charge * 1.30 + after * 0.22;
+    const alpha = intro * (0.55 + 0.45 * charge);
+
+    ctx.save();
+    ctx.translate(CX, CY);
+    ctx.globalAlpha = alpha;
+
+    [1.27, 1.53, 1.78].forEach((k, i) => {
+      ctx.beginPath();
+      ctx.arc(0, 0, R * k, 0, TAU);
+      ctx.lineWidth = i === 0 ? 0.8 : 0.45;
+      ctx.strokeStyle = rgba(INK, i === 0 ? 0.10 : 0.05);
+      ctx.stroke();
+    });
+
+    ctx.rotate(spin * 0.38);
+    for (let i = 0; i < 6; i++) {
+      const a = (i * TAU) / 6;
+      ctx.beginPath();
+      ctx.arc(0, 0, R * 1.42, a + 0.08, a + TAU / 6 - 0.08);
+      ctx.lineWidth = i === 0 ? 1.5 : 0.6;
+      ctx.strokeStyle = i === 0 ? rgba(CYAN, 0.55) : rgba(INK, 0.12);
+      ctx.stroke();
+    }
+
+    ctx.rotate(-spin * 1.15);
+    for (let i = 0; i < 24; i++) {
+      const a = (i * TAU) / 24;
+      const inner = i % 4 === 0 ? R * 1.54 : R * 1.60;
+      const outer = i % 4 === 0 ? R * 1.68 : R * 1.64;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * inner, Math.sin(a) * inner);
+      ctx.lineTo(Math.cos(a) * outer, Math.sin(a) * outer);
+      ctx.lineWidth = i % 4 === 0 ? 1.0 : 0.4;
+      ctx.strokeStyle = i % 4 === 0 ? rgba(VIOLET, 0.30) : rgba(INK, 0.08);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawStar(t, intro, charge, after, glitch) {
+    const p = easeOut(clamp01((t - 0.24) / 1.22));
+    const pB = easeOut(clamp01((t - 0.38) / 1.16));
+    const jitter = (glitch || 0) * 0.055;
+    const scale = (0.62 + 0.38 * p) * (1 + charge * 0.04 + jitter * Math.sin(t * 73) * 0.35);
+
+    const preShake = clamp01((t - 1.72) / 0.5);
+    const impactShake = t > IMPACT && t < IMPACT + 0.16
+      ? (1 - (t - IMPACT) / 0.16)
+      : 0;
+    const shakeX =
+      Math.sin(t * 92) * 1.6 * preShake * (1 - impactShake) +
+      Math.sin(t * 170) * 18 * impactShake;
+    const shakeY =
+      Math.cos(t * 111) * 1.1 * preShake * (1 - impactShake) +
+      Math.cos(t * 210) * 11 * impactShake;
+
+    ctx.save();
+    ctx.translate(CX + shakeX, CY + shakeY);
+    ctx.scale(scale, scale);
+
+    const rotA = -0.42 * (1 - p) + Math.sin(t * 0.25) * 0.006 + Math.sin(t * 61) * jitter;
+    const rotB = Math.PI + 0.42 * (1 - p) + Math.sin(t * 0.25 + 1) * 0.006 + Math.cos(t * 83) * jitter;
+
+    if (after > 0) {
+      starPath(ctx, 0, 0, R, R * 0.555, Math.sin(t * 0.2) * 0.006);
+      ctx.fillStyle = 'rgba(8,12,18,.78)';
+      ctx.fill();
+    }
+
+    const triLen = R * 5.4;
+    ctx.lineJoin = 'miter';
+
+    trianglePath(ctx, 0, 0, R, rotA);
+    ctx.setLineDash([triLen, triLen]);
+    ctx.lineDashOffset = triLen * (1 - p);
+    ctx.lineWidth = 3.4;
+    ctx.strokeStyle = rgba(INK, 0.24 + 0.68 * p);
+    ctx.stroke();
+    ctx.lineWidth = 0.8;
+    ctx.strokeStyle = rgba(CYAN, 0.56 * p);
+    ctx.stroke();
+
+    trianglePath(ctx, 0, 0, R, rotB);
+    ctx.lineDashOffset = triLen * (1 - pB);
+    ctx.lineWidth = 1.9;
+    ctx.strokeStyle = rgba(VIOLET, 0.22 + 0.56 * pB);
+    ctx.stroke();
+    ctx.lineWidth = 0.55;
+    ctx.strokeStyle = rgba(INK, 0.30 * pB);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineDashOffset = 0;
+
+    // 星阵内的点阵
+    if (after > 0) {
+      ctx.save();
+      starPath(ctx, 0, 0, R, R * 0.555, 0);
+      ctx.clip();
+      ctx.fillStyle = `rgba(0,229,195,${0.10 * after})`;
+      const gap = 8;
+      for (let y = -R; y < R; y += gap) {
+        for (let x = -R; x < R; x += gap) {
+          if (Math.hypot(x, y) > R) continue;
+          const phase = Math.sin((x + y) * 0.09 + t * 2.0);
+          ctx.beginPath();
+          ctx.arc(x, y, 0.42 + 0.58 * Math.max(0, phase), 0, TAU);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+
+    // 内六边形
+    if (after > 0) {
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = (i * TAU) / 6 - Math.PI / 2;
+        const x = Math.cos(a) * R * 0.29;
+        const y = Math.sin(a) * R * 0.29;
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.closePath();
+      ctx.lineWidth = 0.85;
+      ctx.strokeStyle = rgba(VIOLET, 0.40 * after);
+      ctx.stroke();
+    }
+
+    // 核心光点
+    const coreR = R * (0.045 + charge * 0.030 + after * 0.015);
+    const core = ctx.createRadialGradient(0, 0, 0, 0, 0, coreR * 2.4);
+    core.addColorStop(0, 'rgba(240,255,252,1)');
+    core.addColorStop(0.22, 'rgba(100,240,220,.9)');
+    core.addColorStop(0.58, 'rgba(0,160,140,.5)');
+    core.addColorStop(1, 'rgba(0,40,36,0)');
+    ctx.fillStyle = core;
+    ctx.beginPath();
+    ctx.arc(0, 0, coreR * 2.4, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawSlash(t) {
+    if (t < IMPACT - 0.02) return;
+    const reveal = easeOut(clamp01((t - (IMPACT - 0.02)) / 0.16));
+    const angle = -0.62;
+    const len = R * 1.78 * reveal;
+    const dx = Math.cos(angle) * len;
+    const dy = Math.sin(angle) * len;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(CX - dx, CY - dy);
+    ctx.lineTo(CX + dx, CY + dy);
+    ctx.lineWidth = 8.0;
+    ctx.strokeStyle = rgba(CYAN, 0.90);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(CX - dx, CY - dy);
+    ctx.lineTo(CX + dx, CY + dy);
+    ctx.lineWidth = 1.7;
+    ctx.strokeStyle = rgba(INK, 0.9);
+    ctx.stroke();
+
+    const ox = -Math.sin(angle) * 16;
+    const oy = Math.cos(angle) * 16;
+    ctx.beginPath();
+    ctx.moveTo(CX - dx + ox, CY - dy + oy);
+    ctx.lineTo(CX + dx + ox, CY + dy + oy);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = rgba(VIOLET, 0.42);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawBurst(t) {
+    const dt = t - IMPACT;
+    if (dt < 0 || dt > 1.35) return;
+    ctx.save();
+    for (const s of burstSeeds) {
+      const age = dt - s.delay;
+      if (age < 0) continue;
+      const k = Math.min(1, age / 1.25);
+      const dist = R * 0.25 + s.speed * R * (1 - Math.pow(1 - k, 2));
+      const x = CX + Math.cos(s.a) * dist;
+      const y = CY + Math.sin(s.a) * dist + 110 * k * k;
+      const alpha = (1 - k) * 0.8;
+      if (s.streak) {
+        const nx = x - Math.cos(s.a) * 22 * (1 - k);
+        const ny = y - Math.sin(s.a) * 22 * (1 - k);
+        ctx.beginPath();
+        ctx.moveTo(nx, ny);
+        ctx.lineTo(x, y);
+        ctx.lineWidth = s.size * 0.6;
+        ctx.strokeStyle = s.accent ? rgba(CYAN, alpha) : rgba(INK, alpha);
+        ctx.stroke();
+      } else {
+        ctx.beginPath();
+        ctx.arc(x, y, s.size * (1 - k * 0.6), 0, TAU);
+        ctx.fillStyle = s.accent ? rgba(CYAN, alpha) : rgba(MUTED, alpha);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawImpactRings(t) {
+    const dt = t - IMPACT;
+    if (dt < 0 || dt > 0.95) return;
+    ctx.save();
+    for (let i = 0; i < 4; i++) {
+      const age = dt - i * 0.055;
+      if (age < 0) continue;
+      const k = Math.min(1, age / (0.62 + i * 0.07));
+      const radius = R * (0.95 + (2.2 + i * 0.35) * (1 - Math.pow(1 - k, 3)));
+      ctx.beginPath();
+      ctx.arc(CX, CY, radius, 0, TAU);
+      ctx.lineWidth = (i === 0 ? 6.5 : 2.8) * (1 - k) + 0.4;
+      ctx.strokeStyle = i % 2 === 0
+        ? rgba(CYAN, (1 - k) * 0.58)
+        : rgba(VIOLET, (1 - k) * 0.42);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawCracks(t) {
+    const dt = t - IMPACT;
+    if (dt < 0 || dt > 1.15) return;
+    const fade = 1 - clamp01((dt - 0.25) / 0.9);
+    if (fade <= 0) return;
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 13; i++) {
+      const a = (i / 13) * TAU + 0.19;
+      const start = R * (0.72 + ((i * 17) % 100) / 100 * 0.32);
+      const end = R * (1.85 + ((i * 29) % 100) / 100 * 1.1);
+      const mid = (start + end) * 0.5;
+      const side = (i % 2 ? 1 : -1) * 0.055;
+      ctx.beginPath();
+      ctx.moveTo(CX + Math.cos(a) * start, CY + Math.sin(a) * start);
+      ctx.lineTo(CX + Math.cos(a + side) * mid, CY + Math.sin(a + side) * mid);
+      ctx.lineTo(CX + Math.cos(a - side * 0.6) * end, CY + Math.sin(a - side * 0.6) * end);
+      ctx.lineWidth = i % 3 === 0 ? 1.5 : 0.7;
+      ctx.strokeStyle = i % 3 === 0
+        ? rgba(INK, 0.46 * fade)
+        : rgba(CYAN, 0.40 * fade);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawFlash(t) {
+    const dt = t - IMPACT;
+    if (dt < 0 || dt > 0.42) return;
+
+    ctx.save();
+
+    if (dt < 0.075) {
+      // 冲击第一帧：亮底深色星
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#eef8f6';
+      ctx.fillRect(0, 0, W, H);
+
+      const sc = 0.92 + (dt / 0.075) * 0.16;
+      ctx.save();
+      ctx.translate(CX, CY);
+      ctx.rotate(-0.04);
+      ctx.scale(sc, sc);
+      starPath(ctx, 0, 0, R, R * 0.555, 0);
+      ctx.fillStyle = '#0a0e14';
+      ctx.fill();
+      ctx.restore();
+
+      ctx.beginPath();
+      ctx.moveTo(CX - R * 1.38, CY + R * 0.84);
+      ctx.lineTo(CX + R * 1.38, CY - R * 0.84);
+      ctx.lineWidth = 10;
+      ctx.strokeStyle = '#00e5c3';
+      ctx.stroke();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#eef8f6';
+      ctx.stroke();
+    } else if (dt < 0.14) {
+      // 冲击第二帧：黑底亮色星（核心冲击帧）
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#05080c';
+      ctx.fillRect(0, 0, W, H);
+
+      ctx.save();
+      ctx.translate(CX, CY);
+      ctx.rotate(0.03);
+      ctx.scale(1.04, 1.04);
+      starPath(ctx, 0, 0, R, R * 0.555, 0);
+      ctx.fillStyle = '#e8f6f4';
+      ctx.fill();
+      ctx.restore();
+
+      ctx.beginPath();
+      ctx.moveTo(CX - R * 1.5, CY + R * 0.92);
+      ctx.lineTo(CX + R * 1.5, CY - R * 0.92);
+      ctx.lineWidth = 12;
+      ctx.strokeStyle = '#00e5c3';
+      ctx.stroke();
+      ctx.lineWidth = 2.3;
+      ctx.strokeStyle = '#e8f6f4';
+      ctx.stroke();
+
+      for (let i = 0; i < 28; i++) {
+        const a = (i / 28) * TAU;
+        const r1 = R * 1.05;
+        const r2 = R * (1.45 + (i % 3) * 0.18);
+        ctx.beginPath();
+        ctx.moveTo(CX + Math.cos(a) * r1, CY + Math.sin(a) * r1);
+        ctx.lineTo(CX + Math.cos(a) * r2, CY + Math.sin(a) * r2);
+        ctx.lineWidth = i % 4 === 0 ? 3 : 1;
+        ctx.strokeStyle = 'rgba(5,8,12,.85)';
+        ctx.stroke();
+      }
+    } else {
+      // 冲击第三帧：余晖淡出
+      const k = 1 - clamp01((dt - 0.14) / 0.28);
+      ctx.globalAlpha = k * 0.90;
+      ctx.fillStyle = '#eef8f6';
+      ctx.fillRect(0, 0, W, H);
+
+      ctx.save();
+      ctx.translate(CX, CY);
+      ctx.scale(1.02, 1.02);
+      starPath(ctx, 0, 0, R, R * 0.555, 0);
+      ctx.fillStyle = 'rgba(5,8,12,.9)';
+      ctx.fill();
+      ctx.restore();
+
+      ctx.beginPath();
+      ctx.moveTo(CX - R * 1.35, CY + R * 0.82);
+      ctx.lineTo(CX + R * 1.35, CY - R * 0.82);
+      ctx.lineWidth = 8 * k + 1;
+      ctx.strokeStyle = '#00e5c3';
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  function frame(now) {
+    let t = STILL ? STILL_T : (now - start) / 1000;
+    if (!STILL && t >= LOOP) {
+      start = now;
+      t = 0;
+    }
+
+    const settled = !STILL && t > IMPACT + 0.36;
+    if (settled) t = 3.25;
+
+    const intro = clamp01(t / 0.9);
+    const charge = easeInOut(clamp01((t - 1.42) / 0.86));
+    const after = easeOut(clamp01((t - IMPACT - 0.02) / 0.55));
+    const glitch = settled ? 0 : glitchAmount(t);
+
+    if (signalEl) {
+      signalEl.style.opacity = !settled && glitch > 0.12 ? String(0.35 + glitch * 0.55) : '0';
+      if (signalCode && !settled && glitch > 0.12) {
+        const code = (Math.floor(t * 19) * 73 + 0x2f) & 0xfff;
+        signalCode.textContent = '0x' + code.toString(16).toUpperCase().padStart(3, '0');
+      }
+    }
+
+    if (t > IMPACT + 0.36) {
+      copy.classList.add('show');
+      meta.classList.add('show');
+    } else {
+      copy.classList.remove('show');
+      meta.classList.remove('show');
+    }
+
+    const dtImpact = t - IMPACT;
+    const punch = dtImpact >= 0 && dtImpact < 0.38
+      ? 1 + 0.09 * Math.pow(1 - dtImpact / 0.38, 2)
+      : 1;
+    const impactTilt = dtImpact >= 0 && dtImpact < 0.3
+      ? Math.sin(dtImpact * 150) * 0.006 * (1 - dtImpact / 0.3)
+      : 0;
+
+    const shakeWindow = 0.26;
+    const shakeK = dtImpact >= 0 && dtImpact < shakeWindow
+      ? Math.pow(1 - dtImpact / shakeWindow, 2)
+      : 0;
+    const shakeX = (Math.sin(dtImpact * 167) * 24 + Math.sin(dtImpact * 311) * 11) * shakeK;
+    const shakeY = (Math.cos(dtImpact * 193) * 19 + Math.cos(dtImpact * 277) * 8) * shakeK;
+
+    if (title) title.classList.remove('hit');
+
+    ctx.clearRect(0, 0, W, H);
+    drawBackground(t);
+
+    ctx.save();
+    ctx.translate(CX + shakeX, CY + shakeY);
+    ctx.rotate(impactTilt);
+    ctx.scale(punch, punch);
+    ctx.translate(-CX, -CY);
+
+    drawSun(t, intro, charge, after);
+    drawSpeedLines(t, charge, after);
+    drawRings(t, intro, charge, after);
+    drawStar(t, intro, charge, after, glitch);
+    drawSlash(t);
+    drawImpactRings(t);
+    drawCracks(t);
+    drawBurst(t);
+    ctx.restore();
+
+    applyScreenGlitch(t, glitch);
+    drawFlash(t);
+
+    if (!STILL) {
+      if (settled) {
+        running = false;
+      } else {
+        requestAnimationFrame(frame);
+      }
+    }
+  }
+
+  function init() {
+    resize();
+    reset();
+    if (!STILL) {
+      if (!running) {
+        running = true;
+        requestAnimationFrame(frame);
+      }
+    } else {
+      frame(performance.now());
+    }
+  }
+
+  window.addEventListener('resize', () => {
+    resize();
+    if (STILL) frame(performance.now());
+  });
+
+  replay.addEventListener('click', e => {
+    e.stopPropagation();
+    reset();
+    if (STILL) { STILL = false; requestAnimationFrame(frame); }
+  });
+
+  document.body.addEventListener('click', () => {
+    reset();
+    if (STILL) { STILL = false; requestAnimationFrame(frame); }
+  });
+
+  init();
+})();
+</script>
+</body>
+</html>

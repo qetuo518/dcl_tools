@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent"
+	android:orientation="vertical"
+	android:background="#F5F5F5">
+
+	<com.google.android.material.appbar.AppBarLayout
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar">
+
+		<androidx.appcompat.widget.Toolbar
+			android:id="@+id/toolbar"
+			android:layout_width="match_parent"
+			android:layout_height="?attr/actionBarSize"
+			android:title="工具箱"
+			app:popupTheme="@style/ThemeOverlay.AppCompat.Light"/>
+
+	</com.google.android.material.appbar.AppBarLayout>
+
+	<LinearLayout
+		android:layout_width="match_parent"
+		android:layout_height="match_parent"
+		android:orientation="vertical"
+		android:padding="16dp">
+
+		<LinearLayout
+			android:id="@+id/card_chat"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:orientation="horizontal"
+			android:background="@drawable/card_bg"
+			android:padding="16dp"
+			android:clickable="true"
+			android:focusable="true">
+
+			<TextView
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="💬"
+				android:textSize="32sp"
+				android:layout_gravity="center_vertical"/>
+
+			<LinearLayout
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:orientation="vertical"
+				android:layout_marginStart="16dp"
+				android:layout_gravity="center_vertical">
+
+				<TextView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:text="聊天室"
+					android:textSize="18sp"
+					android:textStyle="bold"
+					android:textColor="#212121"/>
+
+				<TextView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:text="基于 ntfy.sh 的实时消息"
+					android:textSize="13sp"
+					android:textColor="#757575"/>
+
+			</LinearLayout>
+
+		</LinearLayout>
+
+		<LinearLayout
+			android:id="@+id/card_crypto"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:orientation="horizontal"
+			android:background="@drawable/card_bg"
+			android:padding="16dp"
+			android:layout_marginTop="16dp"
+			android:clickable="true"
+			android:focusable="true">
+
+			<TextView
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="🔐"
+				android:textSize="32sp"
+				android:layout_gravity="center_vertical"/>
+
+			<LinearLayout
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:orientation="vertical"
+				android:layout_marginStart="16dp"
+				android:layout_gravity="center_vertical">
+
+				<TextView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:text="加解密"
+					android:textSize="18sp"
+					android:textStyle="bold"
+					android:textColor="#212121"/>
+
+				<TextView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:text="Base64 / AES / DES / MD5 / SHA-1"
+					android:textSize="13sp"
+					android:textColor="#757575"/>
+
+			</LinearLayout>
+
+		</LinearLayout>
+
+		<LinearLayout
+			android:id="@+id/card_shell"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:orientation="horizontal"
+			android:background="@drawable/card_bg"
+			android:padding="16dp"
+			android:layout_marginTop="16dp"
+			android:clickable="true"
+			android:focusable="true">
+
+			<TextView
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="💻"
+				android:textSize="32sp"
+				android:layout_gravity="center_vertical"/>
+
+			<LinearLayout
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:orientation="vertical"
+				android:layout_marginStart="16dp"
+				android:layout_gravity="center_vertical">
+
+				<TextView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:text="Shell执行器"
+					android:textSize="18sp"
+					android:textStyle="bold"
+					android:textColor="#212121"/>
+
+				<TextView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:text="sh / shizuku / root 命令执行"
+					android:textSize="13sp"
+					android:textColor="#757575"/>
+
+			</LinearLayout>
+
+		</LinearLayout>
+
+		<LinearLayout
+			android:id="@+id/card_security"
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:orientation="horizontal"
+			android:background="@drawable/card_bg"
+			android:padding="16dp"
+			android:layout_marginTop="16dp"
+			android:clickable="true"
+			android:focusable="true">
+
+			<TextView
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="🛡️"
+				android:textSize="32sp"
+				android:layout_gravity="center_vertical"/>
+
+			<LinearLayout
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:orientation="vertical"
+				android:layout_marginStart="16dp"
+				android:layout_gravity="center_vertical">
+
+				<TextView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:text="安全防护"
+					android:textSize="18sp"
+					android:textStyle="bold"
+					android:textColor="#212121"/>
+
+				<TextView
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:text="DCL安全护盾 / 勒索保护"
+					android:textSize="13sp"
+					android:textColor="#757575"/>
+
+			</LinearLayout>
+
+		</LinearLayout>
+
+	</LinearLayout>
+
+</LinearLayout>

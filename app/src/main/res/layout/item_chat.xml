@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	android:id="@+id/root"
+	android:layout_width="match_parent"
+	android:layout_height="wrap_content"
+	android:orientation="vertical"
+	android:padding="6dp">
+
+	<LinearLayout
+		android:id="@+id/bubble"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:orientation="vertical"
+		android:padding="10dp"
+		android:background="@drawable/bubble_bg">
+
+		<TextView
+			android:id="@+id/tv_username"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:textSize="11sp"
+			android:textColor="#1976D2"
+			android:textStyle="bold"
+			android:layout_marginBottom="2dp"/>
+
+		<TextView
+			android:id="@+id/tv_msg"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:textSize="15sp"
+			android:textColor="#212121"
+			android:visibility="gone"/>
+
+		<!-- 文件消息区域：默认隐藏，收到/发送文件时显示 -->
+		<LinearLayout
+			android:id="@+id/file_box"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:orientation="horizontal"
+			android:gravity="center_vertical"
+			android:background="#FFFFFF"
+			android:padding="8dp"
+			android:visibility="gone">
+
+			<TextView
+				android:id="@+id/tv_file_icon"
+				android:layout_width="40dp"
+				android:layout_height="40dp"
+				android:gravity="center"
+				android:text="📄"
+				android:textSize="22sp"/>
+
+			<LinearLayout
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:orientation="vertical"
+				android:layout_marginStart="8dp"
+				android:maxWidth="200dp">
+
+				<TextView
+					android:id="@+id/tv_file_name"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:textSize="13sp"
+					android:textColor="#1976D2"
+					android:textStyle="bold"
+					android:singleLine="true"
+					android:ellipsize="middle"/>
+
+				<TextView
+					android:id="@+id/tv_file_size"
+					android:layout_width="wrap_content"
+					android:layout_height="wrap_content"
+					android:textSize="11sp"
+					android:textColor="#757575"/>
+			</LinearLayout>
+
+		</LinearLayout>
+
+		<TextView
+			android:id="@+id/tv_time"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:textSize="10sp"
+			android:textColor="#9E9E9E"
+			android:layout_marginTop="4dp"/>
+
+	</LinearLayout>
+
+</LinearLayout>

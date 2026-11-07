@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#F5F5F5">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="#FFFFFF">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="病毒检测"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:textColor="#CC1F1F" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="扫描设备中的已知病毒/恶意应用"
+            android:textSize="13sp"
+            android:textColor="#888888"
+            android:layout_marginTop="4dp" />
+    </LinearLayout>
+
+    <Button
+        android:id="@+id/scanButton"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="16dp"
+        android:text="本地扫描（推）"
+        android:textSize="16sp"
+        android:textColor="#FFFFFF"
+        android:backgroundTint="#CC1F1F" />
+
+    <Button
+        android:id="@+id/networkScanButton"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="16dp"
+        android:text="联网检测"
+        android:textSize="16sp"
+        android:textColor="#FFFFFF"
+        android:backgroundTint="#2196F3" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginBottom="8dp"
+        android:text="从云端黑名单实时检测已安装应用，需联网"
+        android:textSize="11sp"
+        android:textColor="#AAAAAA"
+        android:gravity="center" />
+
+    <ProgressBar
+        android:id="@+id/progressBar"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="4dp"
+        android:layout_marginHorizontal="16dp"
+        android:visibility="gone"
+        android:progress="0"
+        android:progressTint="#CC1F1F" />
+
+    <TextView
+        android:id="@+id/statusText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="12dp"
+            android:text="点击'本地扫描（推）'开始扫描"
+        android:textSize="14sp"
+        android:gravity="center"
+        android:textColor="#888888" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="12dp">
+
+            <LinearLayout
+                android:id="@+id/highRiskContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="高风险 (包名匹配)"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="#CC1F1F"
+                    android:paddingBottom="8dp" />
+
+                <LinearLayout
+                    android:id="@+id/highRiskList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/mediumRiskContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="中风险 (应用名匹配)"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="#FF9800"
+                    android:paddingBottom="8dp" />
+
+                <LinearLayout
+                    android:id="@+id/mediumRiskList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/lowRiskContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="低风险 (应用名匹配)"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="#FFC107"
+                    android:paddingBottom="8dp" />
+
+                <LinearLayout
+                    android:id="@+id/lowRiskList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/emptyView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="24dp"
+                android:text="设备安全，未发现病毒应用"
+                android:textSize="15sp"
+                android:gravity="center"
+                android:textColor="#4CAF50"
+                android:visibility="gone" />
+
+        </LinearLayout>
+    </ScrollView>
+
+</LinearLayout>
