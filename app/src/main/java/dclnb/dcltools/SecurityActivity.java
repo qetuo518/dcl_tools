@@ -46,6 +46,16 @@ public class SecurityActivity extends AppCompatActivity {
 				startActivity(i);
 			}
 		});
+
+        // 白名单管理
+		View cardWhitelist = findViewById(R.id.card_whitelist);
+		cardWhitelist.setOnClickListener(new View.OnClickListener() {
+			@Override
+			public void onClick(View v) {
+				Intent i = new Intent(SecurityActivity.this, WhitelistActivity.class);
+				startActivity(i);
+			}
+		});
 	}
 
 	@Override

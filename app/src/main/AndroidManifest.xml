@@ -154,6 +154,20 @@
             android:exported="false"
             android:screenOrientation="portrait"/>
 
+        <!-- 白名单管理 -->
+        <activity
+            android:name=".WhitelistActivity"
+            android:label="白名单管理"
+            android:exported="false"
+            android:screenOrientation="portrait"/>
+
+        <!-- 赞助页面 -->
+        <activity
+            android:name=".ZfActivity"
+            android:label="支持作者"
+            android:exported="false"
+            android:screenOrientation="portrait"/>
+
         <!-- 开机自启（BOOT_COMPLETED 属系统广播，Android 11+ 必须 exported=true 才收得到） -->
         <receiver
             android:name=".BootReceiver"

@@ -1,6 +1,7 @@
 package dclnb.dcltools;
 
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.LinearLayout;
@@ -22,6 +23,8 @@ public class MainActivity extends AppCompatActivity {
 		LinearLayout cardCrypto = (LinearLayout) findViewById(R.id.card_crypto);
 		LinearLayout cardShell = (LinearLayout) findViewById(R.id.card_shell);
 		LinearLayout cardSecurity = (LinearLayout) findViewById(R.id.card_security);
+		LinearLayout cardGithub = (LinearLayout) findViewById(R.id.card_github);
+		LinearLayout cardSponsor = (LinearLayout) findViewById(R.id.card_sponsor);
 
 		cardChat.setOnClickListener(new View.OnClickListener() {
 			@Override
@@ -51,6 +54,22 @@ public class MainActivity extends AppCompatActivity {
 			@Override
 			public void onClick(View v) {
 				Intent i = new Intent(MainActivity.this, SecurityActivity.class);
+				startActivity(i);
+			}
+		});
+
+		cardGithub.setOnClickListener(new View.OnClickListener() {
+			@Override
+			public void onClick(View v) {
+				Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/qetuo518/dcl_tools/"));
+				startActivity(browserIntent);
+			}
+		});
+
+		cardSponsor.setOnClickListener(new View.OnClickListener() {
+			@Override
+			public void onClick(View v) {
+				Intent i = new Intent(MainActivity.this, ZfActivity.class);
 				startActivity(i);
 			}
 		});

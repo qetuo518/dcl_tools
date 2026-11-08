@@ -264,8 +264,9 @@ public class DclaqActivity extends AppCompatActivity {
                         if (app == null) continue;
                         if ((app.flags & ApplicationInfo.FLAG_SYSTEM) != 0) continue;
                         if (app.packageName.equals(getPackageName())) continue;
-                        if (app.packageName.equals("dclnb.dclaqhd")) continue;
-                        if (ShellExecutor.forceStopApp(app.packageName)) {
+                         if (app.packageName.equals("dclnb.dclaqhd")) continue;
+                         if (Whitelist.isWhitelisted(DclaqActivity.this, app.packageName)) continue;
+                         if (ShellExecutor.forceStopApp(app.packageName)) {
                             count++;
                         }
                     }

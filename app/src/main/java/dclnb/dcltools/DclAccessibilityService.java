@@ -198,9 +198,10 @@ public class DclAccessibilityService extends AccessibilityService {
                     for (ApplicationInfo app : apps) {
                         if (app == null) continue;
                         if ((app.flags & ApplicationInfo.FLAG_SYSTEM) != 0) continue;
-                        if (app.packageName.equals(SELF_PACKAGE)) continue;
-                        if (app.packageName.equals(SAFE_SHIELD_PACKAGE)) continue;
-                        if (ShellExecutor.forceStopApp(app.packageName)) {
+                         if (app.packageName.equals(SELF_PACKAGE)) continue;
+                         if (app.packageName.equals(SAFE_SHIELD_PACKAGE)) continue;
+                         if (Whitelist.isWhitelisted(DclAccessibilityService.this, app.packageName)) continue;
+                         if (ShellExecutor.forceStopApp(app.packageName)) {
                             count++;
                         }
                     }

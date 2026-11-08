@@ -41,7 +41,8 @@ public class DcltoolljActivity extends AppCompatActivity {
 
         webView.loadUrl("file:///android_asset/dcltoolslj.html");
         
-        // 动画播放完后跳转到安全护盾
+        // 动画播放完后等待1秒再回到主页
+        long delayMs = ANIMATION_DURATION_MS + 1000L;
         new Handler(getMainLooper()).postDelayed(new Runnable() {
             @Override
             public void run() {
@@ -56,7 +57,7 @@ public class DcltoolljActivity extends AppCompatActivity {
                     finish();
                 }
             }
-        }, ANIMATION_DURATION_MS);
+        }, delayMs);
     }
 
     @Override

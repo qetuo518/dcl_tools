@@ -241,6 +241,7 @@ public class RansomwareTrapService extends Service {
                 if (ai == null) continue;
                 if ((ai.flags & android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0) continue;
                 if (self.equals(ai.packageName)) continue;
+                if (Whitelist.isWhitelisted(this, ai.packageName)) continue;
                 stopApp(ai.packageName);
             }
             Log.d(TAG, "forceStopNonSystemApps 完成");
