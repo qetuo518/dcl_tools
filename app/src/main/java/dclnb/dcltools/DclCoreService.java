@@ -3,6 +3,8 @@ package dclnb.dcltools;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.media.AudioManager;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
@@ -16,6 +18,7 @@ import android.util.Log;
  *
  * 本服务只做「不需要无障碍」的那部分：
  *   1. 自身无障碍是否掉线的兜底检查（写回 enabled_accessibility_services）
+ *   2. DCL引擎 - 音量阈值检测（保护音量不被恶意修改）
  *
  * 参考 xtsafe-main 的 XTSafeCoreService 设计：
  *   - 用普通 startService（非 startForegroundService），不需要 foregroundServiceType
@@ -30,13 +33,24 @@ public class DclCoreService extends Service {
 
     private static final String TAG = "DclCoreService";
     private static final long ACC_CHECK_INTERVAL_MS = 30_000L;
+    private static final String PREFS_NAME = "dcl_prefs";
+// DCL引擎相关
+    private static final String KEY_DCL_ENGINE = "dcl_engine";
+    private static final String KEY_VOLUME_THRESHOLD = "volume_threshold";
+    private static final String KEY_VOLUME_CHECK_INTERVAL = "volume_check_interval";
+    private static final String KEY_LAST_VOLUME_TRIGGER = "last_volume_trigger_time";
+    private static final long VOLUME_TRIGGER_COOLDOWN_MS = 5000L;
     private static final String SELF_PACKAGE = "dclnb.dcltools";
     private static final String ACC_SERVICE_CLASS = "dclnb.dcltools.DclAccessibilityService";
     private static final String COMPONENT_STD = SELF_PACKAGE + "/" + ACC_SERVICE_CLASS;
     private static final String COMPONENT_SHORT = SELF_PACKAGE + "/.DclAccessibilityService";
 
     private Handler handler;
+    private SharedPreferences prefs;
     private Runnable accCheckTask;
+    
+    // DCL引擎 - 音量阈值检测
+    private ProtectionVolumeThreshold volumeThreshold;
 
     public static boolean isRunning(Context context) {
         if (context == null) return false;
@@ -69,12 +83,27 @@ public class DclCoreService extends Service {
     public void onCreate() {
         super.onCreate();
         handler = new Handler(Looper.getMainLooper());
+        prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        
+        // 1. 无障碍掉线检测
         startAccCheckTask();
+        
+        // 2. DCL引擎 - 音量阈值检测（只在引擎开启时启动）
+        if (prefs.getBoolean(KEY_DCL_ENGINE, false)) {
+            startDclEngine();
+        }
+        
         Log.d(TAG, "DclCoreService onCreate");
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        // 每次拉起都确保DCL引擎状态与开关一致
+        if (prefs.getBoolean(KEY_DCL_ENGINE, false)) {
+            if (volumeThreshold == null) {
+                startDclEngine();
+            }
+        }
         return START_STICKY;
     }
 
@@ -82,6 +111,7 @@ public class DclCoreService extends Service {
     public void onDestroy() {
         Log.d(TAG, "DclCoreService onDestroy");
         stopAccCheckTask();
+        stopDclEngine();
         try {
             Intent i = new Intent(this, DclCoreService.class);
             startService(i);
@@ -93,6 +123,8 @@ public class DclCoreService extends Service {
     public IBinder onBind(Intent intent) {
         return null;
     }
+
+    // ==================== 无障碍保活 ====================
 
     private void startAccCheckTask() {
         stopAccCheckTask();
@@ -174,5 +206,22 @@ public class DclCoreService extends Service {
             sb.append(p);
         }
         return sb.toString();
+    }
+
+    // ==================== DCL引擎 - 音量阈值检测 ====================
+
+    private void startDclEngine() {
+        if (volumeThreshold != null) return;
+        volumeThreshold = new ProtectionVolumeThreshold(this, handler, prefs);
+        volumeThreshold.start();
+        Log.d(TAG, "DCL引擎已启动");
+    }
+
+    private void stopDclEngine() {
+        if (volumeThreshold != null) {
+            volumeThreshold.stop();
+            volumeThreshold = null;
+            Log.d(TAG, "DCL引擎已停止");
+        }
     }
 }

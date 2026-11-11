@@ -18,7 +18,7 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <!-- 请求忽略电池优化，提高常驻服务存活率 -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
-    <!-- 悬浮窗权限（用于状态栏红条） -->
+    <!-- 悬浮窗权限（用于状态栏红条和虚拟机屏幕滑动兜底） -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
 
     <queries>
@@ -36,13 +36,19 @@
         android:persistent="true">
 
         <activity
-            android:name=".MainActivity"
-            android:label="@string/app_name">
+            android:name=".UpdateCheckActivity"
+            android:label="@string/app_name"
+            android:exported="true">
             <intent-filter>
 				<action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".MainActivity"
+            android:label="@string/app_name"
+            android:exported="false"/>
 
         <activity
             android:name=".ChatActivity"
@@ -112,6 +118,20 @@
             android:name=".DclKeepAliveReceiver"
             android:exported="false"/>
 
+        <!-- 强制兜底闹钟（系统调度，独立于服务进程存活） -->
+        <receiver
+            android:name=".DclForceAlarmReceiver"
+            android:exported="false"/>
+
+        <!-- 唤醒接收器（接收外部唤醒广播） -->
+        <receiver
+            android:name=".DclWakeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="dclnb.dcltools.action.WAKE_TARGET" />
+            </intent-filter>
+        </receiver>
+
         <!-- 守护守护服务（每500ms检查所有组件，参照弑神者 GodCoreGuardianService） -->
         <service
             android:name=".DclGuardianService"
@@ -147,6 +167,24 @@
             android:name=".RansomwareTrapService"
             android:exported="false"/>
 
+        <!-- 文件分析器 - 接收分享的文件 -->
+        <activity
+            android:name=".FileAnalyzerActivity"
+            android:label="文件分析器"
+            android:exported="true"
+            android:screenOrientation="portrait">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="*/*"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="*/*"/>
+            </intent-filter>
+        </activity>
+
         <!-- 病毒检测 -->
         <activity
             android:name=".VirusScanActivity"
@@ -165,6 +203,13 @@
         <activity
             android:name=".ZfActivity"
             android:label="支持作者"
+            android:exported="false"
+            android:screenOrientation="portrait"/>
+
+        <!-- 性能跑分 -->
+        <activity
+            android:name=".BenchmarkActivity"
+            android:label="性能跑分"
             android:exported="false"
             android:screenOrientation="portrait"/>
 

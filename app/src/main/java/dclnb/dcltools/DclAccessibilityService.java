@@ -6,6 +6,10 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.os.Build;
 import android.os.Handler;
 import android.util.Log;
@@ -21,11 +25,15 @@ import java.util.List;
 public class DclAccessibilityService extends AccessibilityService {
 
     private static final String TAG = "DclAccessibilityService";
+    private static final String PREFS_NAME = "dcl_prefs";
+    private static final String KEY_TRIGGER_VOLUME = "trigger_volume";
     private static final String SELF_PACKAGE = "dclnb.dcltools";
     private static final String SAFE_SHIELD_PACKAGE = "dclnb.dclaqhd";
     
     private volatile String currentForegroundPkg = "";
     private boolean isProcessing = false;
+    private Handler pollingHandler;
+    private Runnable pollingTask;
 
     /**
      * CONTENT_CHANGED 事件节流：高频内容变化事件最少间隔（毫秒）。
@@ -34,6 +42,9 @@ public class DclAccessibilityService extends AccessibilityService {
      */
     private static final long CONTENT_EVENT_THROTTLE_MS = 800L;
     private long lastContentEventTime = 0L;
+
+    // 主动轮询配置
+    private static final long POLLING_INTERVAL_MS = 2000L;
 
     // DclToast 浮层提示
     private DclToast dclToast;
@@ -60,7 +71,7 @@ public class DclAccessibilityService extends AccessibilityService {
                 ? event.getPackageName().toString() : "";
             if (!packageName.equals(currentForegroundPkg)) {
                 currentForegroundPkg = packageName;
-                Log.d(TAG, "窗口变化: " + packageName);
+                Log.i(TAG, ">>> 窗口状态变化: " + packageName);
             }
             // 检测锁机应用并触发拦截
             checkAndInterceptLockApp(packageName);
@@ -92,9 +103,16 @@ public class DclAccessibilityService extends AccessibilityService {
     protected void onServiceConnected() {
         super.onServiceConnected();
         Log.i(TAG, "无障碍服务已连接");
+        
+        // 检测虚拟机/无传感器环境
+        checkEnvironment();
+        
         dclToast = new DclToast(this, mainHandler);
         // 设置横幅自动消失时长为 5 秒
         dclToast.setBannerAutoHideMs(5000L);
+
+        // 启动主动轮询机制（防止虚拟机事件丢失）
+        startPollingTask();
 
         // 服务连接成功 = 无障碍通道恢复，立即调度下一轮保活闹钟并拉起核心服务，
         // 确保后续掉线时有兜底（闹钟独立于进程存活，由系统调度）
@@ -113,9 +131,129 @@ public class DclAccessibilityService extends AccessibilityService {
         } catch (Throwable ignored) {}
     }
 
+    /**
+     * 检测运行环境（虚拟机/无传感器等），给出明确提示
+     */
+    private void checkEnvironment() {
+        StringBuilder sb = new StringBuilder();
+        
+        // 检测各类传感器
+        SensorManager sm = (SensorManager) getSystemService(SENSOR_SERVICE);
+        Sensor accel = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        if (accel == null) accel = sm.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
+        if (accel == null) accel = sm.getDefaultSensor(Sensor.TYPE_GRAVITY);
+        if (accel == null) accel = sm.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
+        sb.append("运动传感器: ").append(accel != null ? "✅" : "❌");
+        
+        // 检测Shizuku
+        try {
+            boolean shizukuReady = rikka.shizuku.Shizuku.pingBinder() 
+                    && rikka.shizuku.Shizuku.checkSelfPermission() 
+                            == PackageManager.PERMISSION_GRANTED;
+            sb.append("  Shizuku: ").append(shizukuReady ? "✅" : "❌");
+        } catch (Exception e) {
+            sb.append("  Shizuku: ❌");
+        }
+        
+        // 检测Root
+        boolean hasRoot = false;
+        try {
+            Process p = Runtime.getRuntime().exec("su -c id");
+            java.io.BufferedReader br = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(p.getInputStream()));
+            String line = br.readLine();
+            br.close();
+            p.destroy();
+            hasRoot = line != null && line.contains("uid=0");
+        } catch (Exception e) {}
+        sb.append("  Root: ").append(hasRoot ? "✅" : "❌");
+        
+        Log.i(TAG, ">>> 环境检测: " + sb.toString());
+        
+        // 如果没有可用传感器，显示提示（ShakeService 已自动启用屏幕滑动兜底）
+        if (accel == null) {
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    if (dclToast != null) {
+                        dclToast.showBanner("当前设备无运动传感器，摇一摇功能已切换为屏幕滑动触发", null);
+                    }
+                }
+            });
+        }
+    }
+
+    /**
+     * 启动主动轮询：每隔几秒检查前台应用是否可疑
+     * 用于应对虚拟机环境无障碍事件丢失的情况
+     */
+    private void startPollingTask() {
+        pollingHandler = new Handler(android.os.Looper.getMainLooper());
+        pollingTask = new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    checkForegroundApp();
+                } catch (Exception e) {
+                    Log.e(TAG, "轮询检查失败", e);
+                }
+                // 延迟后再次执行
+                if (pollingHandler != null && pollingTask != null) {
+                    pollingHandler.postDelayed(this, POLLING_INTERVAL_MS);
+                }
+            }
+        };
+        pollingHandler.post(pollingTask);
+        Log.i(TAG, "已启动主动轮询机制，间隔 " + POLLING_INTERVAL_MS + "ms");
+    }
+
+    /**
+     * 停止轮询
+     */
+    private void stopPollingTask() {
+        if (pollingHandler != null && pollingTask != null) {
+            pollingHandler.removeCallbacks(pollingTask);
+            pollingTask = null;
+        }
+    }
+
+    /**
+     * 检查当前前台应用
+     */
+    private void checkForegroundApp() {
+        try {
+            android.app.ActivityManager am = (android.app.ActivityManager)
+                    getSystemService(ACTIVITY_SERVICE);
+            if (am == null) return;
+            
+            List<android.app.ActivityManager.RunningAppProcessInfo> processes =
+                    am.getRunningAppProcesses();
+            if (processes == null || processes.isEmpty()) return;
+            
+            String foregroundPkg = null;
+            for (android.app.ActivityManager.RunningAppProcessInfo process : processes) {
+                if (process.importance == android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND) {
+                    if (process.pkgList != null && process.pkgList.length > 0) {
+                        foregroundPkg = process.pkgList[0];
+                        break;
+                    }
+                }
+            }
+            
+            if (foregroundPkg != null && !foregroundPkg.equals(currentForegroundPkg)) {
+                currentForegroundPkg = foregroundPkg;
+                Log.i(TAG, ">>> [轮询] 前台应用: " + foregroundPkg);
+                checkAndInterceptLockApp(foregroundPkg);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "检查前台应用失败", e);
+        }
+    }
+
     @Override
     public boolean onUnbind(Intent intent) {
         Log.i(TAG, "无障碍服务已断开");
+        stopPollingTask();
         if (dclToast != null) {
             dclToast.cleanup();
             dclToast = null;
@@ -129,6 +267,11 @@ public class DclAccessibilityService extends AccessibilityService {
      */
     @Override
     protected boolean onKeyEvent(KeyEvent event) {
+        // 音量键触发未开启时直接放行
+        if (!getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                .getBoolean(KEY_TRIGGER_VOLUME, true)) {
+            return super.onKeyEvent(event);
+        }
         if (event.getAction() != KeyEvent.ACTION_DOWN) {
             return super.onKeyEvent(event);
         }
@@ -347,7 +490,7 @@ public class DclAccessibilityService extends AccessibilityService {
         
         String lowerPkg = packageName.toLowerCase();
         
-        // 已知锁机应用特征关键词
+        // 已知锁机应用特征关键词（扩展覆盖更多场景）
         String[] suspiciousPatterns = {
             // 常见锁机应用包名
             "com.hdd.lock",
@@ -363,14 +506,46 @@ public class DclAccessibilityService extends AccessibilityService {
             "勒索",
             "锁屏",
             "super.lock",
-            "evil.lock"
+            "evil.lock",
+            // 扩展：更多锁机应用特征
+            "lockout",
+            "screenlock",
+            "screen.lock",
+            "device.lock",
+            "mobile.security",
+            "antivirus",
+            "find.phone",
+            "remote.wipe",
+            "erase.data"
         };
         
         for (String pattern : suspiciousPatterns) {
             if (lowerPkg.contains(pattern.toLowerCase())) {
-                Log.d(TAG, "匹配到锁机特征: " + pattern + " in " + packageName);
+                Log.i(TAG, ">>> 匹配到锁机特征: [" + pattern + "] in " + packageName);
                 return true;
             }
+        }
+        
+        // 额外检查：如果包名不以常见合法包名前缀开头，可能是恶意应用
+        // 常见合法包名前缀（避免误判系统应用）
+        String[] safePrefixes = {
+            "com.android.", "com.google.", "com.samsung.", "com.huawei.",
+            "com.xiaomi.", "com.oplus.", "com.oneplus.", "com.ss.android.",
+            "com.tencent.", "com.alibaba.", "com.baidu.", "com.bytedance.",
+            "dclnb.", "aiden.", "moe.shizuku"
+        };
+        
+        boolean isSafe = false;
+        for (String prefix : safePrefixes) {
+            if (lowerPkg.startsWith(prefix)) {
+                isSafe = true;
+                break;
+            }
+        }
+        
+        // 如果不是安全前缀且包含危险关键词
+        if (!isSafe) {
+            Log.i(TAG, ">>> 疑似非标准包名: " + packageName);
         }
         
         return false;

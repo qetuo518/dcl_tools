@@ -8,6 +8,9 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.IBinder;
 import android.util.Log;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.WindowManager;
 
 /**
  * 摇一摇检测服务（参照 xtsafe-main ShakeDetector）。
@@ -17,6 +20,8 @@ import android.util.Log;
  *   2. 阈值合理：标准档 4.0，轻摇 1.5，用力 8.0，猛摇 14.0
  *   3. 首次注册时建立基线，避免第一帧误判
  *   4. 持续摇动至少 250ms 才算一次有效摇晃
+ *   5. 虚拟机无加速传感器时，自动 fallback 到重力/线性加速度/陀螺仪
+ *   6. 全传感器缺失时，启用屏幕快速滑动作为兜底触发
  */
 public class ShakeService extends Service implements SensorEventListener {
 
@@ -31,23 +36,47 @@ public class ShakeService extends Service implements SensorEventListener {
     private static final float THRESHOLD_VIOLENT  = 14.0f;
 
     private SensorManager sensorManager;
-    private Sensor accelerometer;
+    private Sensor primarySensor;
     private long lastShakeTime = 0;
     private long shakeStartTime = 0;
     private float lastX, lastY, lastZ;
     private float threshold;
     private boolean baselineInitialized = false;
+    
+    /** 是否处于虚拟机/无传感器模式 */
+    private boolean isVirtualMode = false;
+    
+    /** 屏幕滑动兜底相关 */
+    private View overlayView;
+    private float lastTouchX, lastTouchY;
+    private long lastTouchTime = 0;
+    private static final float TOUCH_SWIPE_THRESHOLD = 150.0f; // px
+    private static final long TOUCH_SWIPE_TIMEOUT = 300L;      // ms
 
     @Override
     public void onCreate() {
         super.onCreate();
         sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
-        accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-        if (accelerometer != null) {
-            sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
-            Log.i(TAG, "摇一摇检测服务已启动");
+        
+        // 优先级：加速度 > 线性加速度 > 重力 > 陀螺仪
+        primarySensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        if (primarySensor == null) {
+            primarySensor = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
+        }
+        if (primarySensor == null) {
+            primarySensor = sensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY);
+        }
+        if (primarySensor == null) {
+            primarySensor = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
+        }
+        
+        if (primarySensor != null) {
+            sensorManager.registerListener(this, primarySensor, SensorManager.SENSOR_DELAY_NORMAL);
+            Log.i(TAG, "摇一摇检测服务已启动，使用传感器: " + primarySensor.getType());
         } else {
-            Log.w(TAG, "设备不支持加速度传感器");
+            Log.w(TAG, "警告：设备不支持任何运动传感器，启用屏幕滑动兜底模式");
+            isVirtualMode = true;
+            startTouchFallback();
         }
     }
 
@@ -63,9 +92,10 @@ public class ShakeService extends Service implements SensorEventListener {
 
     @Override
     public void onDestroy() {
-        if (sensorManager != null && accelerometer != null) {
+        if (sensorManager != null && primarySensor != null) {
             sensorManager.unregisterListener(this);
         }
+        stopTouchFallback();
         super.onDestroy();
         Log.i(TAG, "摇一摇服务已停止");
     }
@@ -142,5 +172,65 @@ public class ShakeService extends Service implements SensorEventListener {
     private void broadcastShakeDetected() {
         Intent intent = new Intent("dcl_shake_detected");
         sendBroadcast(intent);
+    }
+
+    // ==================== 屏幕滑动兜底 ====================
+
+    private void startTouchFallback() {
+        try {
+            WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
+            overlayView = new View(this);
+            overlayView.setBackgroundColor(0x00000000); // 完全透明
+            
+            WindowManager.LayoutParams params = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_PHONE,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+                android.graphics.PixelFormat.TRANSLUCENT
+            );
+            
+            wm.addView(overlayView, params);
+            
+            overlayView.setOnTouchListener(new View.OnTouchListener() {
+                @Override
+                public boolean onTouch(View v, MotionEvent event) {
+                    if (event.getAction() == MotionEvent.ACTION_UP) {
+                        float dx = event.getX() - lastTouchX;
+                        float dy = event.getY() - lastTouchY;
+                        long now = System.currentTimeMillis();
+                        
+                        // 快速滑动检测
+                        if (Math.abs(dx) + Math.abs(dy) > TOUCH_SWIPE_THRESHOLD 
+                                && now - lastTouchTime < TOUCH_SWIPE_TIMEOUT) {
+                            Log.i(TAG, "检测到屏幕滑动（虚拟机模式）: dx=" + dx + ", dy=" + dy);
+                            broadcastShakeDetected();
+                        }
+                        
+                        lastTouchX = event.getX();
+                        lastTouchY = event.getY();
+                        lastTouchTime = now;
+                    }
+                    return true;
+                }
+            });
+            
+            Log.i(TAG, "屏幕滑动兜底已启用");
+        } catch (Exception e) {
+            Log.e(TAG, "启用屏幕滑动兜底失败", e);
+        }
+    }
+
+    private void stopTouchFallback() {
+        if (overlayView != null) {
+            try {
+                WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
+                wm.removeView(overlayView);
+            } catch (Exception e) {
+                // ignore
+            }
+            overlayView = null;
+        }
     }
 }

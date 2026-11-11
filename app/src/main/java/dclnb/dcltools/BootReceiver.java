@@ -43,12 +43,13 @@ public class BootReceiver extends BroadcastReceiver {
                 // 1. 提权开启无障碍
                 enableAccessibilityByShell(ctx);
 
-                // 2. 拉起所有守护服务（参照弑神者 GodBootReceiver）
+                // 3. 拉起守护服务（参照弑神者 GodBootReceiver）
                 try { DclCoreService.ensureStarted(ctx); } catch (Throwable ignored) {}
                 try { DclGuardianService.ensureStarted(ctx); } catch (Throwable ignored) {}
                 try { DclRestartService.ensureStarted(ctx); } catch (Throwable ignored) {}
                 try { DclGuardianProcess.ensureStarted(ctx); } catch (Throwable ignored) {}
                 try { DclKeepAliveReceiver.schedule(ctx); } catch (Throwable ignored) {}
+                try { DclForceAlarmReceiver.schedule(ctx); } catch (Throwable ignored) {}
 
                 // 3. 若防护开关开启，拉起守护服务
                 try {

@@ -3,12 +3,14 @@ package dclnb.dcltools;
 import androidx.appcompat.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.Settings;
 import android.view.ContextMenu;
 import android.view.MenuItem;
 import android.view.View;
@@ -36,9 +38,7 @@ public class ChatActivity extends AppCompatActivity {
 	private static final String BASE_URL = "https://ntfy.sh/" + TOPIC;
 	private static final String PREFS_NAME = "chat";
 	private static final String KEY_USERNAME = "username";
-	/** 列表最多显示的消息条数，超出后丢弃最旧的，避免消息过多导致卡顿/闪退 */
 	private static final int MAX_MESSAGES = 100;
-	/** 去重 id 缓存上限，防止长时间运行内存持续增长 */
 	private static final int MAX_SEEN_IDS = 1000;
 
 	private ListView listView;
@@ -48,17 +48,27 @@ public class ChatActivity extends AppCompatActivity {
 	private List<ChatMsg> messages = new ArrayList<ChatMsg>();
 	private Set<String> seenIds = java.util.Collections.synchronizedSet(new java.util.LinkedHashSet<String>());
 	private Handler handler = new Handler(Looper.getMainLooper());
-	private boolean running = true;
+	/** 标记 Activity 是否仍在运行 */
+	private volatile boolean running = true;
+	/** 标记 Activity 是否已销毁，用于阻止所有 UI 操作 */
+	private volatile boolean destroyed = false;
 	private volatile String myUsername = "";
 	private okhttp3.OkHttpClient wsClient;
 	private okhttp3.WebSocket ws;
+	/** 等待存储权限后的待下载消息 */
+	private ChatMsg pendingDownloadMsg;
+
+	/** 安全地发送 UI 更新，若 Activity 已销毁则跳过 */
+	private void safePost(Runnable runnable) {
+		if (!running || destroyed) return;
+		handler.post(runnable);
+	}
 
 	/** 添加去重 ID，当缓存超过 MAX_SEEN_IDS 时移除最旧的 */
 	private void addSeenId(String id) {
 		synchronized (seenIds) {
 			seenIds.add(id);
 			if (seenIds.size() > MAX_SEEN_IDS) {
-				// LinkedHashSet 保证顺序，移除第一个（最旧的）
 				java.util.Iterator<String> it = seenIds.iterator();
 				if (it.hasNext()) {
 					it.next();
@@ -70,10 +80,10 @@ public class ChatActivity extends AppCompatActivity {
 
 	/** 添加消息并维护 MAX_MESSAGES 上限 */
 	private void addMessage(ChatMsg msg) {
+		if (destroyed || isDestroyed()) return;
 		messages.add(msg);
 		adapter.notifyDataSetChanged();
 		listView.setSelection(messages.size() - 1);
-		// 超出上限时移除最旧的消息
 		if (messages.size() > MAX_MESSAGES) {
 			messages.remove(0);
 		}
@@ -107,10 +117,8 @@ public class ChatActivity extends AppCompatActivity {
 		});
 		listView.setAdapter(adapter);
 
-		// 注册长按上下文菜单
 		registerForContextMenu(listView);
 
-		// 加载本地用户名
 		SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 		myUsername = prefs.getString(KEY_USERNAME, "");
 		if (myUsername == null || myUsername.length() == 0) {
@@ -118,7 +126,6 @@ public class ChatActivity extends AppCompatActivity {
 			prefs.edit().putString(KEY_USERNAME, myUsername).apply();
 		}
 
-		// 添加"改名"菜单
 		toolbar.getMenu().clear();
 		toolbar.getMenu().add(0, 100, 0, "改名").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
 		toolbar.setOnMenuItemClickListener(new Toolbar.OnMenuItemClickListener() {
@@ -149,11 +156,10 @@ public class ChatActivity extends AppCompatActivity {
 			}
 		});
 
-		// 启动 WebSocket 长连接接收消息
 		wsClient = new okhttp3.OkHttpClient.Builder()
 			.connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-			.readTimeout(0, java.util.concurrent.TimeUnit.MILLISECONDS) // 0 = 不超时，长连接
-			.pingInterval(20, java.util.concurrent.TimeUnit.SECONDS)    // 每20s发ping保活
+			.readTimeout(0, java.util.concurrent.TimeUnit.MILLISECONDS)
+			.pingInterval(20, java.util.concurrent.TimeUnit.SECONDS)
 			.build();
 		connectWebSocket();
 	}
@@ -165,23 +171,18 @@ public class ChatActivity extends AppCompatActivity {
 		okhttp3.WebSocketListener listener = new okhttp3.WebSocketListener() {
 			@Override
 			public void onOpen(okhttp3.WebSocket webSocket, okhttp3.Response response) {
-				// 连接成功后拉取一次历史消息（与实时消息共用 seenIds 去重）
 				fetchHistory();
 			}
 
 			@Override
 			public void onMessage(okhttp3.WebSocket webSocket, String text) {
-				if (text == null) {
-					return;
-				}
+				if (text == null) return;
 				text = text.trim();
-				if (text.length() == 0 || text.startsWith(":")) {
-					return; // 跳过 keep-alive 注释行
-				}
+				if (text.length() == 0 || text.startsWith(":")) return;
 				final ChatMsg msg = parseMessage(text);
 				if (msg != null && msg.id != null && msg.id.length() > 0 && !seenIds.contains(msg.id)) {
 					addSeenId(msg.id);
-					handler.post(new Runnable() {
+					safePost(new Runnable() {
 						@Override
 						public void run() {
 							addMessage(msg);
@@ -192,13 +193,11 @@ public class ChatActivity extends AppCompatActivity {
 
 			@Override
 			public void onClosed(okhttp3.WebSocket webSocket, int code, String reason) {
-				// 服务端关闭，尝试重连
 				reconnectIfAlive();
 			}
 
 			@Override
 			public void onFailure(okhttp3.WebSocket webSocket, Throwable t, okhttp3.Response response) {
-				// 网络异常，尝试重连
 				reconnectIfAlive();
 			}
 		};
@@ -206,10 +205,7 @@ public class ChatActivity extends AppCompatActivity {
 	}
 
 	private void reconnectIfAlive() {
-		if (!running) {
-			return;
-		}
-		// 延迟1秒后重连
+		if (!running) return;
 		handler.postDelayed(new Runnable() {
 			@Override
 			public void run() {
@@ -231,28 +227,20 @@ public class ChatActivity extends AppCompatActivity {
 				okhttp3.Response response = null;
 				try {
 					response = wsClient.newCall(request).execute();
-					if (!response.isSuccessful()) {
-						return;
-					}
+					if (!response.isSuccessful()) return;
 					okhttp3.ResponseBody body = response.body();
-					if (body == null) {
-						return;
-					}
+					if (body == null) return;
 					java.io.BufferedReader reader =
 						new java.io.BufferedReader(new java.io.InputStreamReader(body.byteStream(), "UTF-8"));
 					String line;
 					while ((line = reader.readLine()) != null) {
 						line = line.trim();
-						if (line.length() == 0 || line.startsWith(":")) {
-							continue;
-						}
-						if (!line.startsWith("{")) {
-							continue;
-						}
+						if (line.length() == 0 || line.startsWith(":")) continue;
+						if (!line.startsWith("{")) continue;
 						final ChatMsg msg = parseMessage(line);
 						if (msg != null && msg.id != null && msg.id.length() > 0 && !seenIds.contains(msg.id)) {
 							addSeenId(msg.id);
-							handler.post(new Runnable() {
+							safePost(new Runnable() {
 								@Override
 								public void run() {
 									addMessage(msg);
@@ -268,12 +256,11 @@ public class ChatActivity extends AppCompatActivity {
 						response.close();
 					}
 				}
-				// 历史全部加入后统一刷新一次列表
-				handler.post(new Runnable() {
+				safePost(new Runnable() {
 					@Override
 					public void run() {
-						adapter.notifyDataSetChanged();
-						listView.setSelection(messages.size() - 1);
+						if (adapter != null) adapter.notifyDataSetChanged();
+						if (listView != null) listView.setSelection(messages.size() - 1);
 					}
 				});
 			}
@@ -283,27 +270,32 @@ public class ChatActivity extends AppCompatActivity {
 
 	@Override
 	protected void onDestroy() {
-		super.onDestroy();
 		running = false;
+		destroyed = true;
+		if (handler != null) {
+			handler.removeCallbacksAndMessages(null);
+		}
 		if (ws != null) {
-			ws.cancel();
+			try {
+				ws.close(1000, "Activity destroyed");
+			} catch (Exception e) {
+				// 忽略关闭异常
+			}
 			ws = null;
 		}
-		if (wsClient != null) {
-			wsClient.dispatcher().executorService().shutdown();
-			wsClient.connectionPool().evictAll();
-			wsClient = null;
-		}
+		// 不关闭 executorService，让 OkHttp 自然回收
+		super.onDestroy();
 	}
 
 	// ==================== 文件功能 ====================
 
 	private static final int REQ_PICK_FILE = 2001;
+	/** 存储权限请求码 */
+	private static final int REQ_STORAGE_PERMISSION = 1001;
 
-	/** ntfy 单条消息附件大小上限（字节），超过则无法上传 */
+	/** ntfy 单条消息附件大小上限（字节） */
 	private static final long MAX_UPLOAD_SIZE = 15L * 1024 * 1024;
 
-	/** 点击左下角 + 号弹出的功能选择菜单 */
 	private void showAddMenu() {
 		final String[] items = new String[] { "文件" };
 		new AlertDialog.Builder(this)
@@ -320,7 +312,6 @@ public class ChatActivity extends AppCompatActivity {
 			.show();
 	}
 
-	/** 调起系统文件选择器（优先使用 Storage Access Framework） */
 	private void pickFile() {
 		try {
 			Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
@@ -343,7 +334,6 @@ public class ChatActivity extends AppCompatActivity {
 		}
 	}
 
-	/** 从 Uri 读取文件名 */
 	private String getFileNameFromUri(Uri uri) {
 		String name = null;
 		android.database.Cursor cursor = null;
@@ -359,7 +349,6 @@ public class ChatActivity extends AppCompatActivity {
 				}
 			}
 		} catch (Exception e) {
-			// ignore
 		} finally {
 			if (cursor != null) {
 				cursor.close();
@@ -371,7 +360,6 @@ public class ChatActivity extends AppCompatActivity {
 		return name;
 	}
 
-	/** 上传选定文件到 ntfy，成功后展示为文件消息 */
 	private void uploadFile(final Uri uri) {
 		final String originalName = getFileNameFromUri(uri);
 		toast("正在发送文件：" + originalName);
@@ -379,7 +367,6 @@ public class ChatActivity extends AppCompatActivity {
 			@Override
 			public void run() {
 				try {
-					// 获取附件大小
 					long size = 0L;
 					android.content.ContentResolver cr = getContentResolver();
 					try (android.database.Cursor c = cr.query(uri, new String[]{"_size"}, null, null, null)) {
@@ -388,14 +375,14 @@ public class ChatActivity extends AppCompatActivity {
 						}
 					}
 					if (size <= 0) {
-						try (java.io.InputStream is = cr.openInputStream(uri)) {
+						try (InputStream is = cr.openInputStream(uri)) {
 							if (is != null) {
 								size = is.available();
 							}
 						}
 					}
 					if (size > MAX_UPLOAD_SIZE) {
-						handler.post(new Runnable() {
+						safePost(new Runnable() {
 							@Override
 							public void run() {
 								toast("文件过大（>15MB），不支持发送");
@@ -403,19 +390,17 @@ public class ChatActivity extends AppCompatActivity {
 						});
 						return;
 					}
-					// 把文件体直接 POST 到主题（等同 curl -T file ntfy.sh/主题），ntfy 自动按附件处理
-					java.net.HttpURLConnection uploadConn =
-						(java.net.HttpURLConnection) new java.net.URL(BASE_URL).openConnection();
+					HttpURLConnection uploadConn =
+						(HttpURLConnection) new URL(BASE_URL).openConnection();
 					uploadConn.setConnectTimeout(20000);
 					uploadConn.setReadTimeout(60000);
 					uploadConn.setRequestMethod("POST");
 					uploadConn.setDoOutput(true);
-					// octet-stream 强制按附件处理（避免被当成纯文本消息）
 					uploadConn.setRequestProperty("Content-Type", "application/octet-stream");
 					uploadConn.setRequestProperty("Filename", originalName);
 					uploadConn.setRequestProperty("Title", myUsername == null ? "" : myUsername);
-					try (java.io.InputStream is = cr.openInputStream(uri);
-					     java.io.OutputStream os = uploadConn.getOutputStream()) {
+					try (InputStream is = cr.openInputStream(uri);
+					     OutputStream os = uploadConn.getOutputStream()) {
 						byte[] buf = new byte[8192];
 						int n;
 						while ((n = is.read(buf)) > 0) {
@@ -425,7 +410,6 @@ public class ChatActivity extends AppCompatActivity {
 					int uploadCode = uploadConn.getResponseCode();
 					String respBody = "";
 					if (uploadCode >= 200 && uploadCode < 300) {
-						// 响应为 JSON：{"id":"...","attachment":{"url":"https://ntfy.sh/file/xxx",...}}
 						try (java.io.BufferedReader reader = new java.io.BufferedReader(
 								new java.io.InputStreamReader(uploadConn.getInputStream(), "UTF-8"))) {
 							StringBuilder sb = new StringBuilder();
@@ -440,7 +424,7 @@ public class ChatActivity extends AppCompatActivity {
 
 					if (uploadCode < 200 || uploadCode >= 300) {
 						final int c = uploadCode;
-						handler.post(new Runnable() {
+						safePost(new Runnable() {
 							@Override
 							public void run() {
 								toast("发送失败，HTTP " + c);
@@ -448,7 +432,6 @@ public class ChatActivity extends AppCompatActivity {
 						});
 						return;
 					}
-					// 解析响应：msgId 用于去重（防 WebSocket 回显出重复消息），fileUrl 用于下载
 					String fileUrl = "";
 					String msgId = "";
 					try {
@@ -464,7 +447,6 @@ public class ChatActivity extends AppCompatActivity {
 						addSeenId(msgId);
 					}
 
-					// 上传成功，本地立即展示文件消息（id 已加入 seenIds，WebSocket 回显会被去重）
 					final ChatMsg msg = new ChatMsg();
 					msg.id = msgId.length() > 0 ? msgId : null;
 					msg.fileName = originalName;
@@ -473,7 +455,7 @@ public class ChatActivity extends AppCompatActivity {
 					msg.username = myUsername;
 					msg.message = "已发送文件：" + originalName;
 					msg.time = System.currentTimeMillis();
-					handler.post(new Runnable() {
+					safePost(new Runnable() {
 						@Override
 						public void run() {
 							addMessage(msg);
@@ -481,7 +463,7 @@ public class ChatActivity extends AppCompatActivity {
 					});
 				} catch (Exception e) {
 					final String err = e.getMessage();
-					handler.post(new Runnable() {
+					safePost(new Runnable() {
 						@Override
 						public void run() {
 							toast("发送失败：" + err);
@@ -498,9 +480,58 @@ public class ChatActivity extends AppCompatActivity {
 		if (msg.localPath != null && msg.localPath.length() > 0) {
 			openFile(msg);
 		} else if (msg.fileUrl != null && msg.fileUrl.length() > 0) {
-			downloadFile(msg);
+			checkStoragePermissionAndDownload(msg);
 		} else {
 			toast("无法找到附件信息");
+		}
+	}
+
+	/** 检查存储权限后下载文件 */
+	private void checkStoragePermissionAndDownload(final ChatMsg msg) {
+		this.pendingDownloadMsg = msg;
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+			downloadFile(msg);
+			return;
+		}
+		if (checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+				== PackageManager.PERMISSION_GRANTED) {
+			downloadFile(msg);
+		} else {
+			requestPermissions(new String[] { android.Manifest.permission.WRITE_EXTERNAL_STORAGE },
+					REQ_STORAGE_PERMISSION);
+		}
+	}
+
+	@Override
+	public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+		super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+		if (requestCode == REQ_STORAGE_PERMISSION) {
+			if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+				ChatMsg msg = this.pendingDownloadMsg;
+				this.pendingDownloadMsg = null;
+				if (msg != null) {
+					downloadFile(msg);
+				}
+			} else {
+				this.pendingDownloadMsg = null;
+				toast("需要存储权限才能下载文件");
+				if (shouldShowRequestPermissionRationale(
+						android.Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
+					new AlertDialog.Builder(this)
+						.setTitle("需要存储权限")
+						.setMessage("下载文件需要存储权限，是否前往设置？")
+						.setPositiveButton("去设置", new android.content.DialogInterface.OnClickListener() {
+							@Override
+							public void onClick(android.content.DialogInterface dialog, int which) {
+								Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+								intent.setData(android.net.Uri.parse("package:" + getPackageName()));
+								startActivity(intent);
+							}
+						})
+						.setNegativeButton("取消", null)
+						.show();
+				}
+			}
 		}
 	}
 
@@ -511,14 +542,13 @@ public class ChatActivity extends AppCompatActivity {
 			@Override
 			public void run() {
 				try {
-					// 使用 okhttp 下载
 					okhttp3.Request req = new okhttp3.Request.Builder()
 						.url(msg.fileUrl)
 						.get()
 						.build();
 					final okhttp3.Response resp = wsClient.newCall(req).execute();
 					if (!resp.isSuccessful()) {
-						handler.post(new Runnable() {
+						safePost(new Runnable() {
 							@Override
 							public void run() {
 								toast("下载失败：" + resp.code());
@@ -526,7 +556,6 @@ public class ChatActivity extends AppCompatActivity {
 						});
 						return;
 					}
-					// 取响应头 Content-Disposition 里的文件名
 					String disposition = resp.header("Content-Disposition");
 					final String finalLocalName;
 					String localName = msg.fileName;
@@ -548,8 +577,8 @@ public class ChatActivity extends AppCompatActivity {
 						dir.mkdirs();
 					}
 					File dest = new File(dir, localName);
-					try (java.io.InputStream is = resp.body().byteStream();
-					     java.io.FileOutputStream fos = new java.io.FileOutputStream(dest)) {
+					try (InputStream is = resp.body().byteStream();
+					     FileOutputStream fos = new FileOutputStream(dest)) {
 						byte[] buf = new byte[8192];
 						int n;
 						while ((n = is.read(buf)) > 0) {
@@ -558,7 +587,7 @@ public class ChatActivity extends AppCompatActivity {
 					}
 					final String localPath = dest.getAbsolutePath();
 					msg.localPath = localPath;
-					handler.post(new Runnable() {
+					safePost(new Runnable() {
 						@Override
 						public void run() {
 							adapter.notifyDataSetChanged();
@@ -568,7 +597,7 @@ public class ChatActivity extends AppCompatActivity {
 					});
 				} catch (Exception e) {
 					final String err = e.getMessage();
-					handler.post(new Runnable() {
+					safePost(new Runnable() {
 						@Override
 						public void run() {
 							toast("下载失败：" + err);
@@ -580,7 +609,6 @@ public class ChatActivity extends AppCompatActivity {
 		t.start();
 	}
 
-	/** 打开已下载的文件 */
 	private void openFile(ChatMsg msg) {
 		if (msg.localPath == null || msg.localPath.length() == 0) {
 			toast("文件尚未下载");
@@ -592,7 +620,6 @@ public class ChatActivity extends AppCompatActivity {
 			return;
 		}
 		try {
-			// Android 7+ 禁止跨应用共享 file:// URI，必须用 FileProvider 转成 content://
 			Uri fileUri;
 			if (Build.VERSION.SDK_INT >= 24) {
 				fileUri = androidx.core.content.FileProvider.getUriForFile(
@@ -600,7 +627,6 @@ public class ChatActivity extends AppCompatActivity {
 			} else {
 				fileUri = Uri.fromFile(f);
 			}
-			// 按扩展名推断 MIME 类型，找不到时用 */*
 			String mimeType = "*/*";
 			int dot = f.getName().lastIndexOf('.');
 			if (dot >= 0) {
@@ -620,23 +646,15 @@ public class ChatActivity extends AppCompatActivity {
 		}
 	}
 
-	/** 在 Android 13 以上确保拥有存储权限（实际上 manifest 中已声明，这里只是兼容说明） */
-	private void ensureStoragePermission() {
-		// manifest 已声明 WRITE/READ_EXTERNAL_STORAGE 和 MANAGE_EXTERNAL_STORAGE
-	}
-
 	private ChatMsg parseMessage(String json) {
-		// ntfy 每行返回一个完整 JSON 对象，用 JSONObject 解析更可靠
 		try {
 			org.json.JSONObject obj = new org.json.JSONObject(json);
 			ChatMsg m = new ChatMsg();
 			m.id = obj.optString("id", "");
 			m.message = obj.optString("message", "");
-			// 用户名通过 Title header 携带，JSON 响应里的 title 字段
 			m.username = obj.optString("title", "");
 			long t = obj.optLong("time", 0L);
 			m.time = t * 1000L;
-			// 附件信息：ntfy 的 attachment 对象包含 url / name / size
 			org.json.JSONObject att = obj.optJSONObject("attachment");
 			if (att != null) {
 				m.fileName = att.optString("name", "");
@@ -644,12 +662,10 @@ public class ChatActivity extends AppCompatActivity {
 				if (m.fileName.length() == 0) {
 					m.fileName = null;
 				}
-				// 附件下载地址：优先用 attachment.url（如 https://ntfy.sh/file/xxxxx）
 				String attUrl = att.optString("url", "");
 				if (attUrl.length() > 0) {
 					m.fileUrl = attUrl;
 				} else if (m.id != null && m.id.length() > 0) {
-					// 兜底：按消息 ID 拼接
 					m.fileUrl = BASE_URL + "/" + m.id;
 				}
 			}
@@ -677,7 +693,6 @@ public class ChatActivity extends AppCompatActivity {
 					conn.setRequestMethod("POST");
 					conn.setDoOutput(true);
 					conn.setRequestProperty("Content-Type", "text/plain;charset=UTF-8");
-					// 用户名通过 ntfy 的 Title header 携带，接收端从 JSON 的 title 字段读取
 					String nameToSend = myUsername == null ? "" : myUsername;
 					conn.setRequestProperty("Title", nameToSend);
 					OutputStream os = conn.getOutputStream();
@@ -687,15 +702,14 @@ public class ChatActivity extends AppCompatActivity {
 					int code = conn.getResponseCode();
 					conn.disconnect();
 					if (code >= 200 && code < 300) {
-						handler.post(new Runnable() {
+						safePost(new Runnable() {
 							@Override
 							public void run() {
-								// 发送成功，稍后轮询会拉到
 							}
 						});
 					} else {
 						final int c = code;
-						handler.post(new Runnable() {
+						safePost(new Runnable() {
 							@Override
 							public void run() {
 								toast("发送失败：" + c);
@@ -703,17 +717,16 @@ public class ChatActivity extends AppCompatActivity {
 						});
 					}
 				} catch (Exception e) {
-				final String err = e.getMessage();
-				handler.post(new Runnable() {
-					@Override
-					public void run() {
-						toast("发送失败：" + err);
-					}
-				});
+					final String err = e.getMessage();
+					safePost(new Runnable() {
+						@Override
+						public void run() {
+							toast("发送失败：" + err);
+						}
+					});
+				}
 			}
-		}
-	});
-
+		});
 		t.start();
 	}
 
@@ -721,7 +734,6 @@ public class ChatActivity extends AppCompatActivity {
 		final EditText input = new EditText(this);
 		input.setSingleLine(true);
 		input.setHint("输入新名字，如：小明");
-		// 去掉已有后缀，只显示基础名
 		String baseName = myUsername;
 		if (baseName != null) {
 			int idx = baseName.lastIndexOf('#');
@@ -744,12 +756,10 @@ public class ChatActivity extends AppCompatActivity {
 					toast("名字不能为空");
 					return;
 				}
-				// 如果输入里已带 #，先去掉旧后缀
 				int idx = raw.lastIndexOf('#');
 				if (idx > 0) {
 					raw = raw.substring(0, idx);
 				}
-				// 自动拼接 # 随机4位数（1000~9999）
 				int num = new Random().nextInt(9000) + 1000;
 				String newName = raw + "#" + num;
 				myUsername = newName;

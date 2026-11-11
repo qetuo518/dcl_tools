@@ -6,12 +6,16 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.media.AudioManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.KeyEvent;
 import android.view.View;
 import android.widget.CompoundButton;
+import android.widget.SeekBar;
 import android.widget.Spinner;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
@@ -32,6 +36,10 @@ public class DclaqActivity extends AppCompatActivity {
     private static final String KEY_TRIGGER_SHAKE = "trigger_shake";
     private static final String KEY_SENSITIVITY = "shake_sensitivity";
     private static final String KEY_VOLUME_KEY = "volume_key_type";
+    // DCL引擎相关
+    private static final String KEY_DCL_ENGINE = "dcl_engine";
+    private static final String KEY_VOLUME_THRESHOLD = "volume_threshold";
+    private static final String KEY_VOLUME_CHECK_INTERVAL = "volume_check_interval";
 
     private static final int SHIZUKU_REQUEST_CODE = 1;
 
@@ -41,7 +49,19 @@ public class DclaqActivity extends AppCompatActivity {
     private SwitchCompat switchShake;
     private Spinner spinnerSensitivity;
     private Spinner spinnerVolumeKey;
+    // DCL引擎UI
+    private SwitchCompat switchDclEngine;
+    private SeekBar seekBarVolumeThreshold;
+    private TextView textViewVolumeThreshold;
+    private View linearVolumeSettings;
     private boolean isProtected = false;
+    
+    // 音量键连按检测
+    private static final int VOLUME_PRESS_THRESHOLD = 10;
+    private static final long PRESS_RESET_GAP_MS = 2000L;
+    private int volumePressCount = 0;
+    private long lastVolumePressTime = 0;
+    private Handler volumeKeyHandler = new Handler(Looper.getMainLooper());
 
     private final Shizuku.OnRequestPermissionResultListener shizukuPermissionListener =
             new Shizuku.OnRequestPermissionResultListener() {
@@ -81,6 +101,11 @@ public class DclaqActivity extends AppCompatActivity {
         switchShake = (SwitchCompat) findViewById(R.id.switchShake);
         spinnerSensitivity = (Spinner) findViewById(R.id.spinnerSensitivity);
         spinnerVolumeKey = (Spinner) findViewById(R.id.spinnerVolumeKey);
+        // DCL引擎UI
+        switchDclEngine = (SwitchCompat) findViewById(R.id.switchDclEngine);
+        seekBarVolumeThreshold = (SeekBar) findViewById(R.id.seekBarVolumeThreshold);
+        textViewVolumeThreshold = (TextView) findViewById(R.id.textViewVolumeThreshold);
+        linearVolumeSettings = (View) findViewById(R.id.linearVolumeSettings);
         
         // 加载保存的状态
         switchProtection.setChecked(getPrefsBoolean(KEY_PROTECTION_ENABLED, false));
@@ -93,6 +118,16 @@ public class DclaqActivity extends AppCompatActivity {
         
         int volumeKeyPos = getPrefsInt(KEY_VOLUME_KEY, 0);
         spinnerVolumeKey.setSelection(volumeKeyPos);
+        
+        // DCL引擎状态
+        boolean dclEngineEnabled = getPrefsBoolean(KEY_DCL_ENGINE, false);
+        switchDclEngine.setChecked(dclEngineEnabled);
+        int volumeThreshold = getPrefsInt(KEY_VOLUME_THRESHOLD, 80);
+        seekBarVolumeThreshold.setProgress(volumeThreshold);
+        textViewVolumeThreshold.setText("当音量超过 " + volumeThreshold + "% 时拦截");
+        
+        // 根据DCL引擎开关显示/隐藏音量设置
+        updateDclEngineVisibility(dclEngineEnabled);
         
         // 防护总开关
         switchProtection.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
@@ -135,6 +170,21 @@ public class DclaqActivity extends AppCompatActivity {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 savePrefsBoolean(KEY_TRIGGER_FLOAT, isChecked);
+                if (isProtected) {
+                    if (isChecked) {
+                        // 开启悬浮窗触发：立即显示红条提示
+                        if (GuardService.getInstance() != null) {
+                            GuardService.getInstance().triggerProtection();
+                        }
+                        showToast("悬浮窗触发已开启");
+                    } else {
+                        // 关闭悬浮窗触发：隐藏红条
+                        if (GuardService.getInstance() != null) {
+                            GuardService.getInstance().stopProtection();
+                        }
+                        showToast("悬浮窗触发已关闭");
+                    }
+                }
             }
         });
         
@@ -151,6 +201,32 @@ public class DclaqActivity extends AppCompatActivity {
                     }
                 }
             }
+        });
+        
+        // DCL引擎开关
+        switchDclEngine.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                savePrefsBoolean(KEY_DCL_ENGINE, isChecked);
+                updateDclEngineVisibility(isChecked);
+                // 重启核心服务以应用新设置
+                DclCoreService.ensureStarted(DclaqActivity.this);
+            }
+        });
+        
+        // 音量阈值拖动条
+        seekBarVolumeThreshold.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser) {
+                    savePrefsInt(KEY_VOLUME_THRESHOLD, progress);
+                    textViewVolumeThreshold.setText("当音量超过 " + progress + "% 时拦截");
+                }
+            }
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {}
         });
         
         // 灵敏度选择
@@ -376,6 +452,73 @@ public class DclaqActivity extends AppCompatActivity {
                 showToast("所有权限已就绪，防护已自动开启");
             }
         }
+        
+        // 注册音量键广播（虚拟机兼容）
+        IntentFilter filter = new IntentFilter(Intent.ACTION_MEDIA_BUTTON);
+        registerReceiver(volumeKeyReceiver, filter);
+    }
+    
+    @Override
+    protected void onPause() {
+        super.onPause();
+        try {
+            unregisterReceiver(volumeKeyReceiver);
+        } catch (Exception e) {}
+    }
+    
+    private BroadcastReceiver volumeKeyReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (!getPrefsBoolean(KEY_TRIGGER_VOLUME, true)) return;
+            
+            KeyEvent event = (KeyEvent) intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
+            if (event == null) return;
+            if (event.getAction() != KeyEvent.ACTION_DOWN) return;
+            
+            if (event.getKeyCode() == KeyEvent.KEYCODE_VOLUME_DOWN 
+                    || event.getKeyCode() == KeyEvent.KEYCODE_VOLUME_UP) {
+                handleVolumeKeyPress();
+            }
+        }
+    };
+    
+    private void handleVolumeKeyPress() {
+        long now = System.currentTimeMillis();
+        if (now - lastVolumePressTime > PRESS_RESET_GAP_MS) {
+            volumePressCount = 1;
+        } else {
+            volumePressCount++;
+        }
+        lastVolumePressTime = now;
+        
+        final int count = volumePressCount;
+        volumeKeyHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                if (count < VOLUME_PRESS_THRESHOLD) {
+                    Toast.makeText(DclaqActivity.this, 
+                            "音量键 " + count + "/" + VOLUME_PRESS_THRESHOLD, 
+                            Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+        
+        if (count >= VOLUME_PRESS_THRESHOLD) {
+            volumePressCount = 0;
+            triggerProtection();
+        }
+    }
+    
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN || keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
+            if (!getPrefsBoolean(KEY_TRIGGER_VOLUME, true)) {
+                return super.onKeyDown(keyCode, event);
+            }
+            handleVolumeKeyPress();
+            return true;
+        }
+        return super.onKeyDown(keyCode, event);
     }
     
     private List<String> checkRequiredPermissions() {
@@ -457,5 +600,14 @@ public class DclaqActivity extends AppCompatActivity {
             Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener);
         } catch (Throwable ignored) {}
         unregisterReceiver(shakeReceiver);
+    }
+    
+    /**
+     * 根据DCL引擎开关显示/隐藏音量设置区域
+     */
+    private void updateDclEngineVisibility(boolean enabled) {
+        if (linearVolumeSettings != null) {
+            linearVolumeSettings.setVisibility(enabled ? View.VISIBLE : View.GONE);
+        }
     }
 }

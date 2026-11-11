@@ -33,6 +33,9 @@ public class DclApp extends Application {
         // 1. 调度保活闹钟
         try { DclKeepAliveReceiver.schedule(this); } catch (Throwable ignored) {}
 
+        // 1.5 调度强制兜底闹钟（60秒一次，Doze兼容）
+        try { DclForceAlarmReceiver.schedule(this); } catch (Throwable ignored) {}
+
         // 2. 拉起核心常驻服务
         try { DclCoreService.ensureStarted(this); } catch (Throwable ignored) {}
 

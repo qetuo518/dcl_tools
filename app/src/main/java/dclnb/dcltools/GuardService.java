@@ -289,6 +289,23 @@ public class GuardService extends Service {
             // 创建红条视图
             View dot = new View(this);
             dot.setBackgroundColor(DOT_COLOR);
+            
+            // 添加点击事件：点击跳转到安全防护界面
+            dot.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    android.util.Log.i(TAG, ">>> 悬浮窗红条被点击");
+                    try {
+                        Intent intent = new Intent(GuardService.this, DclaqActivity.class);
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK 
+                                | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                | Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
+                        startActivity(intent);
+                    } catch (Exception e) {
+                        android.util.Log.e(TAG, "跳转失败", e);
+                    }
+                }
+            });
 
             // 计算尺寸
             int width = dpToPx(DOT_WIDTH_DP);
@@ -305,11 +322,30 @@ public class GuardService extends Service {
             // 添加视图
             wm.addView(dot, params);
             statusBarDot = dot;
+            android.util.Log.i(TAG, ">>> 红条已创建，点击可跳转防护界面");
         } catch (Exception e) {
             android.util.Log.w(TAG, "创建红条失败（ACCESSIBILITY_OVERLAY），降级重试", e);
             try {
                 View dot = new View(this);
                 dot.setBackgroundColor(DOT_COLOR);
+                
+                // 添加点击事件
+                dot.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        android.util.Log.i(TAG, ">>> 悬浮窗红条被点击");
+                        try {
+                            Intent intent = new Intent(GuardService.this, DclaqActivity.class);
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK 
+                                    | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                                    | Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
+                            startActivity(intent);
+                        } catch (Exception e) {
+                            android.util.Log.e(TAG, "跳转失败", e);
+                        }
+                    }
+                });
+                
                 WindowManager.LayoutParams params = new WindowManager.LayoutParams(
                         dpToPx(DOT_WIDTH_DP),
                         dpToPx(DOT_HEIGHT_DP),
@@ -317,13 +353,13 @@ public class GuardService extends Service {
                                 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                                 : WindowManager.LayoutParams.TYPE_SYSTEM_OVERLAY,
                         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                                | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
                                 | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                         android.graphics.PixelFormat.TRANSLUCENT
                 );
                 params.gravity = Gravity.TOP | Gravity.START;
                 wm.addView(dot, params);
                 statusBarDot = dot;
+                android.util.Log.i(TAG, ">>> 红条已创建（降级模式）");
             } catch (Exception e2) {
                 android.util.Log.e(TAG, "创建红条失败（降级后仍失败）", e2);
             }
@@ -336,11 +372,11 @@ public class GuardService extends Service {
                 width,
                 height,
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                        ? WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+                        ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                         : WindowManager.LayoutParams.TYPE_SYSTEM_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                        | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                        | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
                 android.graphics.PixelFormat.TRANSLUCENT
         );
         params.gravity = Gravity.TOP | Gravity.START;

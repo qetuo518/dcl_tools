@@ -1,6 +1,8 @@
 package dclnb.dcltools;
 
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Base64;
 import android.view.View;
 import android.widget.AdapterView;
@@ -11,7 +13,12 @@ import android.widget.Spinner;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.List;
 import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -79,8 +86,14 @@ public class CryptoActivity extends AppCompatActivity {
 		String algo = spAlgo.getItemAtPosition(pos).toString();
 		boolean needKey = algo.equals("AES") || algo.equals("DES");
 		findViewById(R.id.et_key).setVisibility(needKey ? View.VISIBLE : View.GONE);
-		// MD5/SHA-1 不可逆，禁用解密
-		btnDecrypt.setEnabled(!algo.equals("MD5") && !algo.equals("SHA-1"));
+		// MD5/SHA-1 可进行字典暴力破解
+		btnDecrypt.setEnabled(true);
+		// 哈希算法时按钮显示暴力破解
+		if (algo.equals("MD5") || algo.equals("SHA-1")) {
+			btnDecrypt.setText("暴力破解");
+		} else {
+			btnDecrypt.setText("解密");
+		}
 	}
 
 	private String getInput() {
@@ -121,19 +134,83 @@ public class CryptoActivity extends AppCompatActivity {
 			return;
 		}
 		try {
-			String result = null;
 			if (algo.equals("Base64")) {
 				byte[] decoded = Base64.decode(input, Base64.NO_WRAP);
-				result = new String(decoded, "UTF-8");
+				etOutput.setText(new String(decoded, "UTF-8"));
 			} else if (algo.equals("AES")) {
-				result = aesDecrypt(input);
+				etOutput.setText(aesDecrypt(input));
 			} else if (algo.equals("DES")) {
-				result = desDecrypt(input);
+				etOutput.setText(desDecrypt(input));
+			} else if (algo.equals("MD5") || algo.equals("SHA-1")) {
+				// 字典暴力破解
+				startBruteForce(algo, input);
+				return;
 			}
-			etOutput.setText(result);
 		} catch (Exception e) {
 			toast("解密失败：" + e.getMessage());
 		}
+	}
+
+	private void startBruteForce(final String algo, final String targetHash) {
+		btnDecrypt.setEnabled(false);
+		btnDecrypt.setText("破解中...");
+		toast("正在使用字典暴力破解...");
+
+		new Thread(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					List<String> dictionary = loadDictionary();
+					String foundPassword = null;
+
+					for (String password : dictionary) {
+						if (password.isEmpty()) continue;
+						String computedHash = hash(algo, password);
+						if (computedHash.equalsIgnoreCase(targetHash)) {
+							foundPassword = password;
+							break;
+						}
+					}
+
+					final String finalPassword = foundPassword;
+					new Handler(Looper.getMainLooper()).post(new Runnable() {
+						@Override
+						public void run() {
+							btnDecrypt.setEnabled(true);
+							btnDecrypt.setText("暴力破解");
+							if (finalPassword != null) {
+								etOutput.setText(finalPassword);
+								toast("破解成功！密码: " + finalPassword);
+							} else {
+								toast("密码未在字典中找到");
+							}
+						}
+					});
+				} catch (final Exception e) {
+					new Handler(Looper.getMainLooper()).post(new Runnable() {
+						@Override
+						public void run() {
+							btnDecrypt.setEnabled(true);
+							btnDecrypt.setText("暴力破解");
+							toast("破解失败：" + e.getMessage());
+						}
+					});
+				}
+			}
+		}).start();
+	}
+
+	private List<String> loadDictionary() throws Exception {
+		List<String> lines = new ArrayList<>();
+		InputStream is = getAssets().open("dclwl.txt");
+		BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"));
+		String line;
+		while ((line = reader.readLine()) != null) {
+			lines.add(line.trim());
+		}
+		reader.close();
+		is.close();
+		return lines;
 	}
 
 	private String aesEncrypt(String input) throws Exception {
