@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
@@ -68,11 +69,17 @@ public class GuardService extends Service {
         autoHideRunnable = null;
         accKeepAliveRunnable = null;
 
-        // 状态持久化恢复：进程被杀重建后，若防护开关仍开着则自动恢复防护
-        if (getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        // 需求：防护默认关闭，只有用户手动开启时才运行。
+        // 防护关闭时，即使服务被拉起也不启动任何功能。
+        if (!getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
                 .getBoolean(KEY_PROTECTION_ENABLED, false)) {
-            startProtection();
+            Log.w(TAG, "防护未开启，GuardService 不启动任何功能");
+            stopSelf();
+            return;
         }
+
+        // 状态持久化恢复：进程被杀重建后，若防护开关仍开着则自动恢复防护
+        startProtection();
     }
 
     @Override

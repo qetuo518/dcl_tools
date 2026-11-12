@@ -10,14 +10,11 @@ import android.util.Log;
 import rikka.shizuku.Shizuku;
 
 /**
- * 开机广播接收器（参照 xtsafe-main BootReceiver）。
+ * 开机广播接收器。
  *
- * 开机后：
- *   1. 提权尝试把无障碍服务写回 enabled_accessibility_services
- *      （Shizuku 开机时可能还没起来，Root 兜底；两者都不行也继续往下走）
- *   2. 拉起核心常驻服务 DclCoreService（不依赖无障碍，负责掉线兜底）
- *   3. 调度 DclKeepAliveReceiver 保活闹钟（防锁屏停止后服务死亡无法恢复）
- *   4. 若用户在界面里打开过防护开关，拉起 GuardService / ShakeService
+ * 需求：安全护盾默认关闭，只有用户手动开启时才启动守护/保活进程。
+ * 开机后仅当用户之前手动开启过防护（protection_enabled=true）时，
+ * 才恢复守护服务，否则不拉起任何守护/保活进程。
  */
 public class BootReceiver extends BroadcastReceiver {
 
@@ -40,24 +37,27 @@ public class BootReceiver extends BroadcastReceiver {
         new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
             @Override
             public void run() {
+                // 需求：默认不启动任何守护/保活进程。
+                // 仅当用户之前手动开启过防护时才恢复。
+                SharedPreferences prefs = ctx.getSharedPreferences("dcl_prefs", Context.MODE_PRIVATE);
+                boolean protectionEnabled = prefs.getBoolean("protection_enabled", false);
+
+                if (!protectionEnabled) {
+                    Log.d(TAG, "防护未开启，开机不拉起任何守护/保活进程");
+                    return;
+                }
+
                 // 1. 提权开启无障碍
                 enableAccessibilityByShell(ctx);
 
-                // 3. 拉起守护服务（参照弑神者 GodBootReceiver）
+                // 2. 防护已开启：拉起守护服务
                 try { DclCoreService.ensureStarted(ctx); } catch (Throwable ignored) {}
                 try { DclGuardianService.ensureStarted(ctx); } catch (Throwable ignored) {}
                 try { DclRestartService.ensureStarted(ctx); } catch (Throwable ignored) {}
                 try { DclGuardianProcess.ensureStarted(ctx); } catch (Throwable ignored) {}
                 try { DclKeepAliveReceiver.schedule(ctx); } catch (Throwable ignored) {}
                 try { DclForceAlarmReceiver.schedule(ctx); } catch (Throwable ignored) {}
-
-                // 3. 若防护开关开启，拉起守护服务
-                try {
-                    SharedPreferences prefs = ctx.getSharedPreferences("dcl_prefs", Context.MODE_PRIVATE);
-                    if (prefs.getBoolean("protection_enabled", false)) {
-                        ctx.startService(new Intent(ctx, GuardService.class));
-                    }
-                } catch (Throwable ignored) {}
+                try { ctx.startService(new Intent(ctx, GuardService.class)); } catch (Throwable ignored) {}
             }
         }, 3000);
     }

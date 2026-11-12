@@ -2,19 +2,16 @@ package dclnb.dcltools;
 
 import android.app.Application;
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.util.Log;
 
 /**
- * DclApp - Application 入口（参照弑神者 GodApp）。
+ * DclApp - Application 入口。
  *
- * 进程启动时拉起所有守护组件：
- *   1. DclCoreService - 无障碍掉线兜底
- *   2. DclKeepAliveReceiver - 系统闹钟兜底（独立于进程）
- *   3. DclGuardianService - 守护守护服务（500ms轮询）
- *   4. DclRestartService - 核心服务重启守护（5s轮询）
- *   5. DclGuardianProcess - 独立进程守护（反向守护主进程）
- *   6. GuardService - 若防护开关开启则拉起
+ * 需求：安全护盾一进入软件默认关闭，任何守护/保活进程都不要有，
+ * 只有用户手动开启安全护盾时才会启动相关服务。
+ *
+ * 因此本 Application 启动时不拉起任何守护/保活组件，
+ * 全部交由 DclaqActivity 在用户手动开启防护时再启动。
  */
 public class DclApp extends Application {
 
@@ -30,32 +27,10 @@ public class DclApp extends Application {
         super.onCreate();
         sContext = this;
 
-        // 1. 调度保活闹钟
-        try { DclKeepAliveReceiver.schedule(this); } catch (Throwable ignored) {}
-
-        // 1.5 调度强制兜底闹钟（60秒一次，Doze兼容）
-        try { DclForceAlarmReceiver.schedule(this); } catch (Throwable ignored) {}
-
-        // 2. 拉起核心常驻服务
-        try { DclCoreService.ensureStarted(this); } catch (Throwable ignored) {}
-
-        // 3. 拉起守护守护服务
-        try { DclGuardianService.ensureStarted(this); } catch (Throwable ignored) {}
-
-        // 4. 拉起重启守护服务
-        try { DclRestartService.ensureStarted(this); } catch (Throwable ignored) {}
-
-        // 5. 拉起独立进程守护（在自身进程死亡时重启主进程）
-        try { DclGuardianProcess.ensureStarted(this); } catch (Throwable ignored) {}
-
-        // 6. 若防护开关仍开启，拉起守护服务
-        try {
-            SharedPreferences prefs = getSharedPreferences("dcl_prefs", MODE_PRIVATE);
-            if (prefs.getBoolean("protection_enabled", false)) {
-                startService(new android.content.Intent(this, GuardService.class));
-            }
-        } catch (Throwable ignored) {}
-
-        Log.d(TAG, "所有守护组件已启动");
+        // 需求：不自动启动任何守护/保活进程。
+        // 安全护盾默认关闭，只有用户手动开启时才启动相关服务。
+        // 因此这里不再拉起 DclCoreService / DclGuardianService /
+        // DclRestartService / DclGuardianProcess / 保活闹钟 等。
+        Log.d(TAG, "DclApp 启动完成（不自动启动任何守护/保活进程）");
     }
 }

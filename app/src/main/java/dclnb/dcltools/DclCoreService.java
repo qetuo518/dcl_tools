@@ -34,6 +34,7 @@ public class DclCoreService extends Service {
     private static final String TAG = "DclCoreService";
     private static final long ACC_CHECK_INTERVAL_MS = 30_000L;
     private static final String PREFS_NAME = "dcl_prefs";
+    private static final String KEY_PROTECTION_ENABLED = "protection_enabled";
 // DCL引擎相关
     private static final String KEY_DCL_ENGINE = "dcl_engine";
     private static final String KEY_VOLUME_THRESHOLD = "volume_threshold";
@@ -85,6 +86,14 @@ public class DclCoreService extends Service {
         handler = new Handler(Looper.getMainLooper());
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         
+        // 需求：防护默认关闭，只有用户手动开启时才运行。
+        // 防护关闭时，即使服务被拉起也不启动任何检测任务。
+        if (!prefs.getBoolean(KEY_PROTECTION_ENABLED, false)) {
+            Log.d(TAG, "防护未开启，DclCoreService 不启动任何任务");
+            stopSelf();
+            return;
+        }
+        
         // 1. 无障碍掉线检测
         startAccCheckTask();
         
@@ -98,6 +107,12 @@ public class DclCoreService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        // 需求：防护关闭时不运行任何任务
+        if (!getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                .getBoolean(KEY_PROTECTION_ENABLED, false)) {
+            stopSelf();
+            return START_NOT_STICKY;
+        }
         // 每次拉起都确保DCL引擎状态与开关一致
         if (prefs.getBoolean(KEY_DCL_ENGINE, false)) {
             if (volumeThreshold == null) {
@@ -112,10 +127,14 @@ public class DclCoreService extends Service {
         Log.d(TAG, "DclCoreService onDestroy");
         stopAccCheckTask();
         stopDclEngine();
-        try {
-            Intent i = new Intent(this, DclCoreService.class);
-            startService(i);
-        } catch (Throwable ignored) {}
+        // 需求：仅当防护开启时才自启，防护关闭时不重启
+        if (getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                .getBoolean(KEY_PROTECTION_ENABLED, false)) {
+            try {
+                Intent i = new Intent(this, DclCoreService.class);
+                startService(i);
+            } catch (Throwable ignored) {}
+        }
         super.onDestroy();
     }
 

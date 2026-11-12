@@ -30,6 +30,9 @@ public class DclAccessibilityService extends AccessibilityService {
     private static final String SELF_PACKAGE = "dclnb.dcltools";
     private static final String SAFE_SHIELD_PACKAGE = "dclnb.dclaqhd";
     
+    /** 供外部（如 Agent）获取无障碍服务实例 */
+    public static DclAccessibilityService instance;
+
     private volatile String currentForegroundPkg = "";
     private boolean isProcessing = false;
     private Handler pollingHandler;
@@ -102,6 +105,7 @@ public class DclAccessibilityService extends AccessibilityService {
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
+        instance = this;
         Log.i(TAG, "无障碍服务已连接");
         
         // 检测虚拟机/无传感器环境
@@ -114,21 +118,20 @@ public class DclAccessibilityService extends AccessibilityService {
         // 启动主动轮询机制（防止虚拟机事件丢失）
         startPollingTask();
 
-        // 服务连接成功 = 无障碍通道恢复，立即调度下一轮保活闹钟并拉起核心服务，
-        // 确保后续掉线时有兜底（闹钟独立于进程存活，由系统调度）
-        try {
-            DclKeepAliveReceiver.schedule(this);
-        } catch (Throwable ignored) {}
-        try {
-            DclCoreService.ensureStarted(this);
-        } catch (Throwable ignored) {}
-        // 防护开关仍开启时，确保守护服务在位
-        try {
-            if (getSharedPreferences("dcl_prefs", MODE_PRIVATE)
-                    .getBoolean("protection_enabled", false)) {
+        // 需求：默认关闭。仅当防护开关开启时才拉起守护服务与保活闹钟。
+        if (getSharedPreferences("dcl_prefs", MODE_PRIVATE)
+                .getBoolean("protection_enabled", false)) {
+            try {
+                DclKeepAliveReceiver.schedule(this);
+            } catch (Throwable ignored) {}
+            try {
+                DclCoreService.ensureStarted(this);
+            } catch (Throwable ignored) {}
+            // 防护开关仍开启时，确保守护服务在位
+            try {
                 startService(new Intent(this, GuardService.class));
-            }
-        } catch (Throwable ignored) {}
+            } catch (Throwable ignored) {}
+        }
     }
 
     /**
@@ -253,6 +256,7 @@ public class DclAccessibilityService extends AccessibilityService {
     @Override
     public boolean onUnbind(Intent intent) {
         Log.i(TAG, "无障碍服务已断开");
+        instance = null;
         stopPollingTask();
         if (dclToast != null) {
             dclToast.cleanup();
@@ -682,6 +686,216 @@ public class DclAccessibilityService extends AccessibilityService {
                 findAndClickButton(child, targets);
                 child.recycle();
             }
+        }
+    }
+
+    /**
+     * 通过无障碍服务点击屏幕指定坐标
+     */
+    public boolean click(int x, int y) {
+        try {
+            android.view.accessibility.AccessibilityNodeInfo node = getRootInActiveWindow();
+            if (node == null) {
+                Log.e(TAG, "click: 无法获取窗口节点");
+                return false;
+            }
+            android.view.accessibility.AccessibilityNodeInfo target = findNodeAt(node, x, y);
+            if (target != null) {
+                boolean result = target.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                target.recycle();
+                node.recycle();
+                Log.i(TAG, "click(" + x + "," + y + "): " + (result ? "成功" : "失败"));
+                return result;
+            }
+            node.recycle();
+            // 兜底：通过系统 input tap 命令
+            return executeTapCommand(x, y);
+        } catch (Exception e) {
+            Log.e(TAG, "click 异常", e);
+            return false;
+        }
+    }
+
+    /**
+     * 通过无障碍服务查找文本并点击
+     */
+    public boolean textClick(String text) {
+        try {
+            AccessibilityNodeInfo root = getRootInActiveWindow();
+            if (root == null) {
+                Log.e(TAG, "textClick: 无法获取窗口节点");
+                return false;
+            }
+            boolean result = findAndClickByText(root, text);
+            root.recycle();
+            Log.i(TAG, "textClick(\"" + text + "\"): " + (result ? "成功" : "失败"));
+            return result;
+        } catch (Exception e) {
+            Log.e(TAG, "textClick 异常", e);
+            return false;
+        }
+    }
+
+    /**
+     * 通过无障碍服务启动应用
+     */
+    public boolean launchApp(String packageName) {
+        if (packageName == null || packageName.isEmpty()) {
+            Log.e(TAG, "launchApp: 包名为空");
+            return false;
+        }
+        try {
+            android.content.Intent intent = getPackageManager().getLaunchIntentForPackage(packageName);
+            if (intent != null) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+                Log.i(TAG, "launchApp(" + packageName + "): 成功");
+                return true;
+            } else {
+                Log.e(TAG, "launchApp(" + packageName + "): 无法获取启动 Intent");
+                return false;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "launchApp 异常", e);
+            return false;
+        }
+    }
+
+    /**
+     * 通过无障碍服务/Shell 在屏幕上执行滑动
+     * @param startXY 起始坐标，格式 "x,y"
+     * @param endXY   结束坐标，格式 "x,y"
+     */
+    public boolean swipe(String startXY, String endXY) {
+        try {
+            String[] sParts = startXY.split(",");
+            String[] eParts = endXY.split(",");
+            if (sParts.length < 2 || eParts.length < 2) return false;
+            int sx = Integer.parseInt(sParts[0].trim());
+            int sy = Integer.parseInt(sParts[1].trim());
+            int ex = Integer.parseInt(eParts[0].trim());
+            int ey = Integer.parseInt(eParts[1].trim());
+            return execSwipeCommand(sx, sy, ex, ey);
+        } catch (Exception e) {
+            Log.e(TAG, "swipe 异常", e);
+            return false;
+        }
+    }
+
+    private boolean execSwipeCommand(int sx, int sy, int ex, int ey) {
+        try {
+            if (rikka.shizuku.Shizuku.pingBinder()
+                    && rikka.shizuku.Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+                return ShellExecutor.execShizuku(
+                        new String[]{"input", "swipe",
+                                String.valueOf(sx), String.valueOf(sy),
+                                String.valueOf(ex), String.valueOf(ey)});
+            }
+            return ShellExecutor.execRoot("input swipe " + sx + " " + sy + " " + ex + " " + ey);
+        } catch (Exception e) {
+            Log.e(TAG, "swipe command 失败", e);
+            return false;
+        }
+    }
+
+    /**
+     * 获取当前屏幕所有可见文字
+     * @return 文本内容，换行分隔
+     */
+    public String getAllText() {
+        StringBuilder sb = new StringBuilder();
+        try {
+            AccessibilityNodeInfo root = getRootInActiveWindow();
+            if (root != null) {
+                collectText(root, sb);
+                root.recycle();
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "getAllText 异常", e);
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 递归遍历节点收集文本
+     */
+    private void collectText(AccessibilityNodeInfo node, StringBuilder sb) {
+        if (node == null) return;
+
+        // 收集当前节点的文本
+        CharSequence text = node.getText();
+        CharSequence contentDesc = node.getContentDescription();
+        if (text != null && text.length() > 0) {
+            sb.append(text.toString()).append("\n");
+        }
+        if (contentDesc != null && contentDesc.length() > 0) {
+            sb.append(contentDesc.toString()).append("\n");
+        }
+
+        // 递归遍历子节点
+        int childCount = node.getChildCount();
+        for (int i = 0; i < childCount; i++) {
+            AccessibilityNodeInfo child = node.getChild(i);
+            if (child != null) {
+                collectText(child, sb);
+                child.recycle();
+            }
+        }
+    }
+
+    // ========== 内部辅助方法 ==========
+
+    private AccessibilityNodeInfo findNodeAt(AccessibilityNodeInfo root, int x, int y) {
+        if (root == null) return null;
+        android.graphics.Rect bounds = new android.graphics.Rect();
+        root.getBoundsInScreen(bounds);
+        if (bounds.contains(x, y)) {
+            return root;
+        }
+        for (int i = 0; i < root.getChildCount(); i++) {
+            AccessibilityNodeInfo child = root.getChild(i);
+            if (child != null) {
+                AccessibilityNodeInfo found = findNodeAt(child, x, y);
+                if (found != null) return found;
+                child.recycle();
+            }
+        }
+        return null;
+    }
+
+    private boolean findAndClickByText(AccessibilityNodeInfo root, String text) {
+        if (root == null) return false;
+        CharSequence nodeText = root.getText();
+        if (nodeText != null && nodeText.toString().contains(text)) {
+            return root.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+        }
+        for (int i = 0; i < root.getChildCount(); i++) {
+            AccessibilityNodeInfo child = root.getChild(i);
+            if (child != null) {
+                if (findAndClickByText(child, text)) {
+                    child.recycle();
+                    return true;
+                }
+                child.recycle();
+            }
+        }
+        return false;
+    }
+
+    private boolean executeTapCommand(int x, int y) {
+        try {
+            // 优先使用 Shizuku
+            if (rikka.shizuku.Shizuku.pingBinder() 
+                    && rikka.shizuku.Shizuku.checkSelfPermission() 
+                            == PackageManager.PERMISSION_GRANTED) {
+                return ShellExecutor.execShizuku(
+                    new String[]{"input", "tap", String.valueOf(x), String.valueOf(y)});
+            }
+            // 降级到 Root
+            return ShellExecutor.execRoot("input tap " + x + " " + y);
+        } catch (Exception e) {
+            Log.e(TAG, "executeTapCommand 异常", e);
+            return false;
         }
     }
 }

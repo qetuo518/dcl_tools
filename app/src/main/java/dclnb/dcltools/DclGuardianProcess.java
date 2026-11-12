@@ -31,6 +31,17 @@ public class DclGuardianProcess extends Service {
         super.onCreate();
         sIsRunning = true;
         handler = new Handler(Looper.getMainLooper());
+
+        // 需求：防护默认关闭，只有用户手动开启时才运行。
+        // 防护关闭时，即使服务被拉起也不启动任何任务。
+        if (!getSharedPreferences("dcl_prefs", MODE_PRIVATE)
+                .getBoolean("protection_enabled", false)) {
+            sIsRunning = false;
+            Log.d(TAG, "防护未开启，DclGuardianProcess 不启动任何任务");
+            stopSelf();
+            return;
+        }
+
         Log.d(TAG, "独立守护进程已启动");
         startMonitorTask();
     }
@@ -49,9 +60,13 @@ public class DclGuardianProcess extends Service {
     public void onDestroy() {
         sIsRunning = false;
         stopMonitorTask();
-        try {
-            startService(new Intent(this, DclGuardianProcess.class));
-        } catch (Exception ignored) {}
+        // 需求：仅当防护开启时才自启，防护关闭时不重启
+        if (getSharedPreferences("dcl_prefs", MODE_PRIVATE)
+                .getBoolean("protection_enabled", false)) {
+            try {
+                startService(new Intent(this, DclGuardianProcess.class));
+            } catch (Exception ignored) {}
+        }
         Log.d(TAG, "独立守护进程已停止");
     }
 

@@ -7,6 +7,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -29,7 +30,11 @@ import java.net.URL;
  */
 public class UpdateCheckActivity extends AppCompatActivity {
 
+    private static final String TAG = "UpdateCheckActivity";
     private static final String UPDATE_API_URL = "https://qght.cn/echouser.php?file=new&admin=114514000";
+    private static final String UPDATE_API_URL_BACKUP = "https://qght.cc/echouser.php?file=new&admin=114514000";
+    private static final String STARTNUM_API_URL = "https://qght.cn/startnum.php?user=114514000";
+    private static final String STARTNUM_API_URL_BACKUP = "https://qght.cc/startnum.php?user=114514000";
     private static final long TIMEOUT_MS = 8000;
 
     private static class ViewRef {
@@ -71,7 +76,8 @@ public class UpdateCheckActivity extends AppCompatActivity {
             @Override
             public void run() {
                 try {
-                    httpGet("https://qght.cn/startnum.php?user=114514000", 5000);
+                    // 尝试主网址，失败后尝试备用网址
+                    httpGetWithFallback(STARTNUM_API_URL, STARTNUM_API_URL_BACKUP, 5000);
                 } catch (Exception e) {
                     // 忽略失败
                 } finally {
@@ -103,7 +109,7 @@ public class UpdateCheckActivity extends AppCompatActivity {
             @Override
             public void run() {
                 try {
-                    String response = httpGet(UPDATE_API_URL, TIMEOUT_MS);
+                    String response = httpGetWithFallback(UPDATE_API_URL, UPDATE_API_URL_BACKUP, TIMEOUT_MS);
 
                     if (!checkFinished) {
                         if (response == null || response.isEmpty()) {
@@ -252,6 +258,19 @@ public class UpdateCheckActivity extends AppCompatActivity {
                 try { conn.disconnect(); } catch (Exception ignored) {}
             }
         }
+    }
+
+    /** HTTP GET 请求，先尝试主网址，失败后尝试备用网址 */
+    private String httpGetWithFallback(String primaryUrl, String backupUrl, long timeoutMs) {
+        String result = httpGet(primaryUrl, timeoutMs);
+        if (result != null) {
+            return result;
+        }
+        if (backupUrl != null && !backupUrl.isEmpty()) {
+            Log.d(TAG, "主网址失败，尝试备用网址: " + backupUrl);
+            return httpGet(backupUrl, timeoutMs);
+        }
+        return null;
     }
 
     /** 正则提取第一个分组 */

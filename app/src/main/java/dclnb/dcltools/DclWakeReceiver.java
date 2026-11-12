@@ -26,6 +26,13 @@ public class DclWakeReceiver extends BroadcastReceiver {
 
         Log.d(TAG, "收到唤醒广播");
 
+        // 需求：默认关闭。仅当防护开关开启时才拉起守护进程。
+        SharedPreferences prefs = context.getSharedPreferences("dcl_prefs", Context.MODE_PRIVATE);
+        if (!prefs.getBoolean("protection_enabled", false)) {
+            Log.d(TAG, "防护未开启，忽略唤醒广播");
+            return;
+        }
+
         // 拉起核心常驻服务
         try {
             DclCoreService.ensureStarted(context);
@@ -46,12 +53,9 @@ public class DclWakeReceiver extends BroadcastReceiver {
             DclGuardianProcess.ensureStarted(context);
         } catch (Throwable ignored) {}
 
-        // 拉起守护服务（如果防护开关仍开着）
+        // 拉起守护服务（防护开关开启时）
         try {
-            SharedPreferences prefs = context.getSharedPreferences("dcl_prefs", Context.MODE_PRIVATE);
-            if (prefs.getBoolean("protection_enabled", false)) {
-                context.startService(new Intent(context, GuardService.class));
-            }
+            context.startService(new Intent(context, GuardService.class));
         } catch (Throwable ignored) {}
 
         // 续订兜底闹钟

@@ -326,6 +326,46 @@
 
             </LinearLayout>
 
+            <!-- 第五行工具 - Agent -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="6dp">
+
+                <LinearLayout
+                    android:id="@+id/card_agent"
+                    android:layout_width="0dp"
+                    android:layout_height="100dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:background="@drawable/card_bg"
+                    android:padding="12dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:layout_marginEnd="6dp">
+
+                    <TextView
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:text="🤖"
+                        android:textSize="24sp"
+                        android:gravity="center"/>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Agent"
+                        android:textSize="13sp"
+                        android:textStyle="bold"
+                        android:textColor="#212121"
+                        android:layout_marginTop="4dp"
+                        android:singleLine="true"/>
+
+                </LinearLayout>
+
+            </LinearLayout>
+
             <!-- 底部信息 -->
             <TextView
                 android:layout_width="match_parent"

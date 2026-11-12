@@ -26,6 +26,16 @@ public class DclGuardianService extends Service {
     public void onCreate() {
         super.onCreate();
         handler = new Handler(Looper.getMainLooper());
+
+        // 需求：防护默认关闭，只有用户手动开启时才运行。
+        // 防护关闭时，即使服务被拉起也不启动任何任务。
+        if (!getSharedPreferences("dcl_prefs", MODE_PRIVATE)
+                .getBoolean("protection_enabled", false)) {
+            Log.d(TAG, "防护未开启，DclGuardianService 不启动任何任务");
+            stopSelf();
+            return;
+        }
+
         startCheckTask();
         Log.d(TAG, "DclGuardianService 已启动，监听所有守护组件");
     }
@@ -43,9 +53,13 @@ public class DclGuardianService extends Service {
     @Override
     public void onDestroy() {
         stopCheckTask();
-        try {
-            startService(new Intent(this, DclGuardianService.class));
-        } catch (Exception ignored) {}
+        // 需求：仅当防护开启时才自启，防护关闭时不重启
+        if (getSharedPreferences("dcl_prefs", MODE_PRIVATE)
+                .getBoolean("protection_enabled", false)) {
+            try {
+                startService(new Intent(this, DclGuardianService.class));
+            } catch (Exception ignored) {}
+        }
         Log.d(TAG, "DclGuardianService 已停止");
     }
 

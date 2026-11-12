@@ -31,6 +31,7 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "MainActivity";
     private static final String NOTICE_API_URL = "https://qght.cn/echouser.php?file=notice&admin=114514000";
+    private static final String NOTICE_API_URL_BACKUP = "https://qght.cc/echouser.php?file=notice&admin=114514000";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -77,6 +78,7 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout cardFileAnalyzer = (LinearLayout) findViewById(R.id.card_file_analyzer);
         LinearLayout cardGithub = (LinearLayout) findViewById(R.id.card_github);
         LinearLayout cardSponsor = (LinearLayout) findViewById(R.id.card_sponsor);
+        LinearLayout cardAgent = (LinearLayout) findViewById(R.id.card_agent);
 
         if (cardChat != null) {
             cardChat.setOnClickListener(new View.OnClickListener() {
@@ -157,6 +159,16 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
         }
+
+        if (cardAgent != null) {
+            cardAgent.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    Intent i = new Intent(MainActivity.this, AgentChatActivity.class);
+                    startActivity(i);
+                }
+            });
+        }
     }
 
     /**
@@ -213,47 +225,100 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * 从服务器获取公告内容。
-     */
-    private String fetchNoticeFromServer() {
-        HttpURLConnection conn = null;
-        BufferedReader reader = null;
-        try {
-            Log.d(TAG, "请求API: " + NOTICE_API_URL);
-            URL url = new URL(NOTICE_API_URL);
-            conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("GET");
-            conn.setConnectTimeout(5000);
-            conn.setReadTimeout(5000);
-            conn.setRequestProperty("User-Agent", "Dalvik/2.1.0 (Linux; U; Android 13)");
+      * 从服务器获取公告内容（支持备用网址）。
+      */
+     private String fetchNoticeFromServer() {
+         // 先尝试主网址
+         String result = fetchWithFallback(NOTICE_API_URL, NOTICE_API_URL_BACKUP);
+         if (result != null && !result.isEmpty()) {
+             return result;
+         }
+         // 两个都失败
+         Log.w(TAG, "主网址和备用网址均获取公告失败");
+         return null;
+     }
 
-            int responseCode = conn.getResponseCode();
-            Log.d(TAG, "API返回状态码: " + responseCode);
-            
-            if (responseCode != HttpURLConnection.HTTP_OK) {
-                Log.w(TAG, "公告接口返回非200状态码: " + responseCode);
-                return null;
-            }
+     /**
+      * HTTP GET 请求，先尝试主网址，失败后尝试备用网址。
+      */
+     private String fetchWithFallback(String primaryUrl, String backupUrl) {
+         HttpURLConnection conn = null;
+         BufferedReader reader = null;
+         try {
+             Log.d(TAG, "请求API（主）: " + primaryUrl);
+             URL url = new URL(primaryUrl);
+             conn = (HttpURLConnection) url.openConnection();
+             conn.setRequestMethod("GET");
+             conn.setConnectTimeout(5000);
+             conn.setReadTimeout(5000);
+             conn.setRequestProperty("User-Agent", "Dalvik/2.1.0 (Linux; U; Android 13)");
 
-            reader = new BufferedReader(new InputStreamReader(conn.getInputStream(), "UTF-8"));
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                sb.append(line);
-            }
-            String result = sb.toString();
-            Log.d(TAG, "API返回内容长度: " + result.length() + ", 内容: [" + result + "]");
-            return result;
-        } catch (Exception e) {
-            Log.e(TAG, "获取公告网络异常: " + e.getMessage(), e);
-            return null;
-        } finally {
-            if (reader != null) {
-                try { reader.close(); } catch (Exception ignored) {}
-            }
-            if (conn != null) {
-                try { conn.disconnect(); } catch (Exception ignored) {}
-            }
-        }
+             int responseCode = conn.getResponseCode();
+             Log.d(TAG, "API返回状态码（主）: " + responseCode);
+             
+             if (responseCode == HttpURLConnection.HTTP_OK) {
+                 reader = new BufferedReader(new InputStreamReader(conn.getInputStream(), "UTF-8"));
+                 StringBuilder sb = new StringBuilder();
+                 String line;
+                 while ((line = reader.readLine()) != null) {
+                     sb.append(line);
+                 }
+                 String result = sb.toString();
+                 Log.d(TAG, "主API返回内容长度: " + result.length());
+                 return result;
+             } else {
+                 Log.w(TAG, "主API返回非200状态码: " + responseCode);
+             }
+         } catch (Exception e) {
+             Log.w(TAG, "主API网络异常: " + e.getMessage());
+         } finally {
+             if (reader != null) {
+                 try { reader.close(); } catch (Exception ignored) {}
+             }
+             if (conn != null) {
+                 try { conn.disconnect(); } catch (Exception ignored) {}
+             }
+         }
+
+         // 主网址失败，尝试备用网址
+         if (backupUrl != null && !backupUrl.isEmpty()) {
+             Log.d(TAG, "尝试备用API: " + backupUrl);
+             try {
+                 URL url = new URL(backupUrl);
+                 conn = (HttpURLConnection) url.openConnection();
+                 conn.setRequestMethod("GET");
+                 conn.setConnectTimeout(5000);
+                 conn.setReadTimeout(5000);
+                 conn.setRequestProperty("User-Agent", "Dalvik/2.1.0 (Linux; U; Android 13)");
+
+                 int responseCode = conn.getResponseCode();
+                 Log.d(TAG, "备用API返回状态码: " + responseCode);
+                 
+                 if (responseCode == HttpURLConnection.HTTP_OK) {
+                     reader = new BufferedReader(new InputStreamReader(conn.getInputStream(), "UTF-8"));
+                     StringBuilder sb = new StringBuilder();
+                     String line;
+                     while ((line = reader.readLine()) != null) {
+                         sb.append(line);
+                     }
+                     String result = sb.toString();
+                     Log.d(TAG, "备用API返回内容长度: " + result.length());
+                     return result;
+                 } else {
+                     Log.w(TAG, "备用API返回非200状态码: " + responseCode);
+                 }
+             } catch (Exception e) {
+                 Log.w(TAG, "备用API网络异常: " + e.getMessage());
+             } finally {
+                 if (reader != null) {
+                     try { reader.close(); } catch (Exception ignored) {}
+                 }
+                 if (conn != null) {
+                     try { conn.disconnect(); } catch (Exception ignored) {}
+                 }
+             }
+         }
+
+         return null;
     }
 }

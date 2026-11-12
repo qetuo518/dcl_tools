@@ -57,6 +57,15 @@ public class ShakeService extends Service implements SensorEventListener {
     public void onCreate() {
         super.onCreate();
         sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
+
+        // 需求：防护默认关闭，只有用户手动开启时才运行。
+        // 防护关闭时，即使服务被拉起也不启动任何任务。
+        if (!getSharedPreferences("dcl_prefs", MODE_PRIVATE)
+                .getBoolean("protection_enabled", false)) {
+            Log.w(TAG, "防护未开启，ShakeService 不启动任何任务");
+            stopSelf();
+            return;
+        }
         
         // 优先级：加速度 > 线性加速度 > 重力 > 陀螺仪
         primarySensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);

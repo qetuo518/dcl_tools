@@ -32,8 +32,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:theme="@style/AppTheme"
-        android:resizeableActivity="true"
-        android:persistent="true">
+        android:resizeableActivity="true">
 
         <activity
             android:name=".UpdateCheckActivity"
@@ -210,6 +209,20 @@
         <activity
             android:name=".BenchmarkActivity"
             android:label="性能跑分"
+            android:exported="false"
+            android:screenOrientation="portrait"/>
+
+        <!-- Agent配置 -->
+        <activity
+            android:name=".AgentConfigActivity"
+            android:label="Agent配置"
+            android:exported="false"
+            android:screenOrientation="portrait"/>
+
+        <!-- Agent聊天 -->
+        <activity
+            android:name=".AgentChatActivity"
+            android:label="Agent"
             android:exported="false"
             android:screenOrientation="portrait"/>
 
