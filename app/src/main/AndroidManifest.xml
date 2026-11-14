@@ -14,6 +14,9 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"/>
+    <!-- 定位权限（Agent工具get_position使用） -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <!-- 无障碍保活兜底闹钟（Doze 兼容） -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <!-- 请求忽略电池优化，提高常驻服务存活率 -->
@@ -32,8 +35,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:theme="@style/AppTheme"
-        android:resizeableActivity="true"
-        android:persistent="true">
+        android:resizeableActivity="true">
 
         <activity
             android:name=".UpdateCheckActivity"
@@ -192,6 +194,13 @@
             android:exported="false"
             android:screenOrientation="portrait"/>
 
+        <!-- 防格机检测 -->
+        <activity
+            android:name=".AntiBrickActivity"
+            android:label="防格机检测"
+            android:exported="false"
+            android:screenOrientation="portrait"/>
+
         <!-- 白名单管理 -->
         <activity
             android:name=".WhitelistActivity"
@@ -210,6 +219,27 @@
         <activity
             android:name=".BenchmarkActivity"
             android:label="性能跑分"
+            android:exported="false"
+            android:screenOrientation="portrait"/>
+
+        <!-- Agent配置 -->
+        <activity
+            android:name=".AgentConfigActivity"
+            android:label="Agent配置"
+            android:exported="false"
+            android:screenOrientation="portrait"/>
+
+        <!-- Agent聊天 -->
+        <activity
+            android:name=".AgentChatActivity"
+            android:label="Agent"
+            android:exported="false"
+            android:screenOrientation="portrait"/>
+
+        <!-- 角色扮演与插件 -->
+        <activity
+            android:name=".PersonaActivity"
+            android:label="角色扮演与插件"
             android:exported="false"
             android:screenOrientation="portrait"/>
 

@@ -41,6 +41,13 @@ public class DclKeepAliveReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         try {
+            // 需求：默认关闭。仅当防护开关开启时才拉起守护进程。
+            SharedPreferences prefs = context.getSharedPreferences("dcl_prefs", Context.MODE_PRIVATE);
+            if (!prefs.getBoolean("protection_enabled", false)) {
+                // 防护已关闭：不再续订闹钟，彻底停止保活
+                return;
+            }
+
             // 拉起核心常驻服务（不依赖无障碍）
             try {
                 DclCoreService.ensureStarted(context);
@@ -48,16 +55,13 @@ public class DclKeepAliveReceiver extends BroadcastReceiver {
 
             // 拉起守护服务（如果防护开关仍开着）
             try {
-                SharedPreferences prefs = context.getSharedPreferences("dcl_prefs", Context.MODE_PRIVATE);
-                if (prefs.getBoolean("protection_enabled", false)) {
-                    context.startService(new Intent(context, GuardService.class));
-                }
+                context.startService(new Intent(context, GuardService.class));
             } catch (Throwable ignored) {}
 
             // 检查无障碍是否需要拉活
             checkAndRecover(context);
 
-            // 始终续订下一个闹钟
+            // 防护开启中，续订下一个闹钟
             schedule(context);
         } catch (Exception ignored) {}
     }
@@ -122,13 +126,17 @@ public class DclKeepAliveReceiver extends BroadcastReceiver {
 
     public static void schedule(Context context) {
         try {
+            // 需求：默认关闭。仅当防护开关开启时才调度保活闹钟。
+            SharedPreferences prefs = context.getSharedPreferences("dcl_prefs", Context.MODE_PRIVATE);
+            if (!prefs.getBoolean("protection_enabled", false)) {
+                return;
+            }
             AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
             if (am == null) return;
             Intent i = new Intent(context, DclKeepAliveReceiver.class);
             i.setAction(ACTION);
             PendingIntent pi = PendingIntent.getBroadcast(context, 0, i,
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-            SharedPreferences prefs = context.getSharedPreferences("dcl_prefs", Context.MODE_PRIVATE);
             boolean strongMode = prefs.getBoolean("strong_keep_alive", false);
             long interval = strongMode ? STRONG_INTERVAL_MS : INTERVAL_MS;
             long next = SystemClock.elapsedRealtime() + interval;
@@ -137,6 +145,19 @@ public class DclKeepAliveReceiver extends BroadcastReceiver {
             } else {
                 am.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, next, pi);
             }
+        } catch (Exception ignored) {}
+    }
+
+    /** 取消保活闹钟（关闭防护时调用，停止保活） */
+    public static void cancel(Context context) {
+        try {
+            AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+            if (am == null) return;
+            Intent i = new Intent(context, DclKeepAliveReceiver.class);
+            i.setAction(ACTION);
+            PendingIntent pi = PendingIntent.getBroadcast(context, 0, i,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            am.cancel(pi);
         } catch (Exception ignored) {}
     }
 }

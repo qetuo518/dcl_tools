@@ -32,7 +32,6 @@
     cursor: pointer;
   }
 
-  /* 细腻网格 + 扫描线 */
   body::before {
     content: "";
     position: fixed;
@@ -66,7 +65,6 @@
     z-index: 1;
   }
 
-  /* 氛围光晕，替换原来的晕影 */
   .ambient {
     position: fixed;
     inset: 0;
@@ -124,7 +122,6 @@
     line-height: 1.6;
   }
 
-  /* 顶部信号条：蓄力阶段出现 */
   .signal {
     position: fixed;
     z-index: 7;
@@ -163,7 +160,6 @@
     transform: scaleX(-1);
   }
 
-  /* 标题区 */
   .title-center {
     position: fixed;
     z-index: 6;
@@ -218,7 +214,6 @@
     opacity: .75;
   }
 
-  /* 底部信息卡 */
   .meta {
     position: fixed;
     z-index: 6;
@@ -323,6 +318,13 @@
     animation: pulse 1.7s ease-in-out infinite;
   }
 
+  .controls {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+  }
+
   .replay {
     border: 1px solid rgba(0,229,195,.22);
     padding: 7px 14px;
@@ -342,6 +344,20 @@
     color: var(--cyan);
   }
 
+  .credit {
+    color: rgba(107,122,141,.42);
+    font: 7px/1.4 var(--mono);
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    text-align: right;
+    margin-right: 2px;
+    transition: color .2s;
+  }
+
+  .credit:hover {
+    color: rgba(0,229,195,.7);
+  }
+
   @keyframes pulse {
     0%, 55% { opacity: 1; transform: scale(1); }
     56%, 100% { opacity: .18; transform: scale(.8); }
@@ -351,6 +367,7 @@
     h1 { font-size: clamp(52px, 14vw, 86px); }
     .reason { font-size: 12px; }
     .meta { top: auto; bottom: 9vh; }
+    .credit { font-size: 6px; }
   }
 </style>
 </head>
@@ -379,7 +396,10 @@
 
   <footer>
     <div class="live">DCL 防护运行中</div>
-    <button class="replay" id="replay">REPLAY</button>
+    <div class="controls">
+      <button class="replay" id="replay">REPLAY</button>
+      <div class="credit" id="credit">借鉴 La 工具箱</div>
+    </div>
   </footer>
 
 <script>
@@ -392,6 +412,7 @@
   const signalEl = document.getElementById('signal');
   const signalCode = document.getElementById('signalCode');
   const replay = document.getElementById('replay');
+  const creditEl = document.getElementById('credit');
   const glitchCanvas = document.createElement('canvas');
   const glitchCtx = glitchCanvas.getContext('2d');
   const params = new URLSearchParams(location.search);
@@ -463,7 +484,6 @@
 
     ctx.restore();
 
-    // RGB 分离残影
     ctx.save();
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     ctx.globalCompositeOperation = 'screen';
@@ -473,7 +493,6 @@
     ctx.drawImage(glitchCanvas, -5 * glitch, 0, W, H);
     ctx.restore();
 
-    // 扫描线 + 噪点块
     ctx.save();
     const scanY = ((t * 0.62) % 1) * H;
     const scan = ctx.createLinearGradient(0, scanY - 2, 0, scanY + 2);
@@ -562,7 +581,6 @@
       ctx.fill();
     }
 
-    // 斜向低对比光带
     ctx.save();
     ctx.translate(CX, CY);
     ctx.rotate(-0.54);
@@ -740,7 +758,6 @@
     ctx.setLineDash([]);
     ctx.lineDashOffset = 0;
 
-    // 星阵内的点阵
     if (after > 0) {
       ctx.save();
       starPath(ctx, 0, 0, R, R * 0.555, 0);
@@ -759,7 +776,6 @@
       ctx.restore();
     }
 
-    // 内六边形
     if (after > 0) {
       ctx.beginPath();
       for (let i = 0; i < 6; i++) {
@@ -774,7 +790,6 @@
       ctx.stroke();
     }
 
-    // 核心光点
     const coreR = R * (0.045 + charge * 0.030 + after * 0.015);
     const core = ctx.createRadialGradient(0, 0, 0, 0, 0, coreR * 2.4);
     core.addColorStop(0, 'rgba(240,255,252,1)');
@@ -906,7 +921,6 @@
     ctx.save();
 
     if (dt < 0.075) {
-      // 冲击第一帧：亮底深色星
       ctx.globalAlpha = 1;
       ctx.fillStyle = '#eef8f6';
       ctx.fillRect(0, 0, W, H);
@@ -931,7 +945,6 @@
       ctx.strokeStyle = '#eef8f6';
       ctx.stroke();
     } else if (dt < 0.14) {
-      // 冲击第二帧：黑底亮色星（核心冲击帧）
       ctx.globalAlpha = 1;
       ctx.fillStyle = '#05080c';
       ctx.fillRect(0, 0, W, H);
@@ -967,7 +980,6 @@
         ctx.stroke();
       }
     } else {
-      // 冲击第三帧：余晖淡出
       const k = 1 - clamp01((dt - 0.14) / 0.28);
       ctx.globalAlpha = k * 0.90;
       ctx.fillStyle = '#eef8f6';

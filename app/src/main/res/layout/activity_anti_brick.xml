@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#F0F2F5">
+
+    <!-- 顶部栏 -->
+    <com.google.android.material.appbar.AppBarLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar">
+
+        <androidx.appcompat.widget.Toolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:title="防格机检测"
+            android:background="?attr/colorPrimary"/>
+
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="12dp">
+
+            <!-- 说明卡片 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg"
+                android:padding="16dp"
+                android:layout_marginBottom="12dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="功能说明"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:textColor="#212121"/>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="本功能可对Shell脚本进行沙箱检测和危险命令扫描，防止恶意脚本导致设备变砖。检测内容包括：格式化命令、危险删除、系统分区操作、恶意软件下载等。"
+                    android:textSize="13sp"
+                    android:textColor="#616161"
+                    android:lineSpacingMultiplier="1.4"
+                    android:layout_marginTop="8dp"/>
+
+            </LinearLayout>
+
+            <!-- 文件选择区域 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg"
+                android:padding="16dp"
+                android:layout_marginBottom="12dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="步骤1: 选择脚本文件"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:textColor="#212121"/>
+
+                <Button
+                    android:id="@+id/btn_pick_file"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:background="#2196F3"
+                    android:text="选择Shell脚本"
+                    android:textColor="#FFFFFF"
+                    android:textSize="15sp"/>
+
+                <!-- 已选择文件显示 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginTop="12dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="已选择文件:"
+                        android:textSize="13sp"
+                        android:textColor="#9E9E9E"/>
+
+                    <TextView
+                        android:id="@+id/tv_file_path"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="未选择文件"
+                        android:textSize="14sp"
+                        android:textColor="#2196F3"
+                        android:padding="8dp"
+                        android:background="#E3F2FD"
+                        android:maxLines="3"/>
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- 检测按钮 -->
+            <Button
+                android:id="@+id/btn_analyze"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:background="#4CAF50"
+                android:text="开始检测"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:enabled="false"/>
+
+            <!-- 加载进度条 -->
+            <ProgressBar
+                android:id="@+id/pb_loading"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                android:layout_marginBottom="12dp"/>
+
+            <!-- 扫描状态 -->
+            <TextView
+                android:id="@+id/tv_scan_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="8dp"/>
+
+            <!-- 检测结果 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="检测结果"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:textColor="#212121"/>
+
+                <TextView
+                    android:id="@+id/tv_result"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="等待检测..."
+                    android:textSize="13sp"
+                    android:textColor="#757575"
+                    android:lineSpacingMultiplier="1.5"
+                    android:layout_marginTop="8dp"/>
+
+            </LinearLayout>
+
+            <!-- 底部信息 -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="DCL安全工具箱 · 防格机检测"
+                android:textSize="11sp"
+                android:textColor="#BDBDBD"
+                android:gravity="center"
+                android:layout_marginTop="16dp"
+                android:paddingBottom="8dp"/>
+
+        </LinearLayout>
+
+    </ScrollView>
+
+</LinearLayout>

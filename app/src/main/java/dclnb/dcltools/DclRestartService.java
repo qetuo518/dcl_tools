@@ -26,6 +26,16 @@ public class DclRestartService extends Service {
     public void onCreate() {
         super.onCreate();
         handler = new Handler(Looper.getMainLooper());
+
+        // 需求：防护默认关闭，只有用户手动开启时才运行。
+        // 防护关闭时，即使服务被拉起也不启动任何任务。
+        if (!getSharedPreferences("dcl_prefs", MODE_PRIVATE)
+                .getBoolean("protection_enabled", false)) {
+            Log.d(TAG, "防护未开启，DclRestartService 不启动任何任务");
+            stopSelf();
+            return;
+        }
+
         startCheckTask();
         Log.d(TAG, "DclRestartService 已启动");
     }
@@ -43,9 +53,13 @@ public class DclRestartService extends Service {
     @Override
     public void onDestroy() {
         stopCheckTask();
-        try {
-            startService(new Intent(this, DclRestartService.class));
-        } catch (Exception ignored) {}
+        // 需求：仅当防护开启时才自启，防护关闭时不重启
+        if (getSharedPreferences("dcl_prefs", MODE_PRIVATE)
+                .getBoolean("protection_enabled", false)) {
+            try {
+                startService(new Intent(this, DclRestartService.class));
+            } catch (Exception ignored) {}
+        }
         Log.d(TAG, "DclRestartService 已停止");
     }
 

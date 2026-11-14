@@ -40,6 +40,10 @@ public class DclaqActivity extends AppCompatActivity {
     private static final String KEY_DCL_ENGINE = "dcl_engine";
     private static final String KEY_VOLUME_THRESHOLD = "volume_threshold";
     private static final String KEY_VOLUME_CHECK_INTERVAL = "volume_check_interval";
+    // 音量阈值范围（5%~50%）
+    private static final int VOLUME_THRESHOLD_MIN = 5;
+    private static final int VOLUME_THRESHOLD_MAX = 50;
+    private static final int VOLUME_THRESHOLD_DEFAULT = 50;
 
     private static final int SHIZUKU_REQUEST_CODE = 1;
 
@@ -70,9 +74,7 @@ public class DclaqActivity extends AppCompatActivity {
                     if (requestCode == SHIZUKU_REQUEST_CODE) {
                         if (grantResult == PackageManager.PERMISSION_GRANTED) {
                             showToast("Shizuku 已授权");
-                            if (!switchProtection.isChecked()) {
-                                switchProtection.setChecked(true);
-                            }
+                            // 需求：授权成功后不自动开启防护，由用户手动开启。
                         } else {
                             showToast("Shizuku 权限被拒绝");
                         }
@@ -107,8 +109,9 @@ public class DclaqActivity extends AppCompatActivity {
         textViewVolumeThreshold = (TextView) findViewById(R.id.textViewVolumeThreshold);
         linearVolumeSettings = (View) findViewById(R.id.linearVolumeSettings);
         
-        // 加载保存的状态
-        switchProtection.setChecked(getPrefsBoolean(KEY_PROTECTION_ENABLED, false));
+        // 需求：默认关闭。安全护盾进入时默认关闭，不自动启动任何守护/保活进程。
+        // 注意：此处在 listener 注册前设置，不会触发 onCheckedChanged。
+        switchProtection.setChecked(false);
         switchVolume.setChecked(getPrefsBoolean(KEY_TRIGGER_VOLUME, true));
         switchFloat.setChecked(getPrefsBoolean(KEY_TRIGGER_FLOAT, false));
         switchShake.setChecked(getPrefsBoolean(KEY_TRIGGER_SHAKE, true));
@@ -122,14 +125,17 @@ public class DclaqActivity extends AppCompatActivity {
         // DCL引擎状态
         boolean dclEngineEnabled = getPrefsBoolean(KEY_DCL_ENGINE, false);
         switchDclEngine.setChecked(dclEngineEnabled);
-        int volumeThreshold = getPrefsInt(KEY_VOLUME_THRESHOLD, 80);
-        seekBarVolumeThreshold.setProgress(volumeThreshold);
+        // 音量阈值：范围 5~50%，进度映射到 SeekBar
+        int volumeThreshold = getPrefsInt(KEY_VOLUME_THRESHOLD, VOLUME_THRESHOLD_DEFAULT);
+        if (volumeThreshold < VOLUME_THRESHOLD_MIN) volumeThreshold = VOLUME_THRESHOLD_MIN;
+        if (volumeThreshold > VOLUME_THRESHOLD_MAX) volumeThreshold = VOLUME_THRESHOLD_MAX;
+        seekBarVolumeThreshold.setProgress(volumeThreshold - VOLUME_THRESHOLD_MIN);
         textViewVolumeThreshold.setText("当音量超过 " + volumeThreshold + "% 时拦截");
         
         // 根据DCL引擎开关显示/隐藏音量设置
         updateDclEngineVisibility(dclEngineEnabled);
         
-        // 防护总开关
+        // 防护总开关（需求：默认关闭，仅用户手动开启才启动守护/保活进程）
         switchProtection.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
@@ -147,11 +153,17 @@ public class DclaqActivity extends AppCompatActivity {
                     startShakeService();
                     DclKeepAliveReceiver.schedule(DclaqActivity.this);
                     DclCoreService.ensureStarted(DclaqActivity.this);
+                    DclGuardianService.ensureStarted(DclaqActivity.this);
+                    DclRestartService.ensureStarted(DclaqActivity.this);
+                    DclGuardianProcess.ensureStarted(DclaqActivity.this);
+                    DclForceAlarmReceiver.schedule(DclaqActivity.this);
                     showToast("防护已开启");
                 } else {
                     isProtected = false;
                     stopGuardService();
                     stopShakeService();
+                    // 关闭防护时停止所有守护/保活进程
+                    stopAllGuardComponents();
                     showToast("防护已关闭");
                 }
             }
@@ -209,8 +221,11 @@ public class DclaqActivity extends AppCompatActivity {
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 savePrefsBoolean(KEY_DCL_ENGINE, isChecked);
                 updateDclEngineVisibility(isChecked);
-                // 重启核心服务以应用新设置
-                DclCoreService.ensureStarted(DclaqActivity.this);
+                // 需求：仅当防护开启时才启动核心服务应用新设置，
+                // 防护关闭时不启动任何守护进程。
+                if (isProtected) {
+                    DclCoreService.ensureStarted(DclaqActivity.this);
+                }
             }
         });
         
@@ -219,8 +234,10 @@ public class DclaqActivity extends AppCompatActivity {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (fromUser) {
-                    savePrefsInt(KEY_VOLUME_THRESHOLD, progress);
-                    textViewVolumeThreshold.setText("当音量超过 " + progress + "% 时拦截");
+                    // 进度映射：progress 0 对应 5%，progress 45 对应 50%
+                    int actual = progress + VOLUME_THRESHOLD_MIN;
+                    savePrefsInt(KEY_VOLUME_THRESHOLD, actual);
+                    textViewVolumeThreshold.setText("当音量超过 " + actual + "% 时拦截");
                 }
             }
             @Override
@@ -258,33 +275,9 @@ public class DclaqActivity extends AppCompatActivity {
         Shizuku.addRequestPermissionResultListener(shizukuPermissionListener);
 
         autoRequestShizukuIfNeeded();
-        autoCheckPermissionsOnStartup();
-    }
-    
-    private void autoCheckPermissionsOnStartup() {
-        List<String> missing = checkRequiredPermissions();
-        
-        if (!missing.isEmpty()) {
-            switchProtection.setChecked(false);
-            savePrefsBoolean(KEY_PROTECTION_ENABLED, false);
-            isProtected = false;
-            
-            new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    showToast("权限不足，防护已自动关闭");
-                }
-            }, 300);
-        } else {
-            switchProtection.setChecked(true);
-            savePrefsBoolean(KEY_PROTECTION_ENABLED, true);
-            isProtected = true;
-            startGuardService();
-            startShakeService();
-            DclKeepAliveReceiver.schedule(this);
-            DclCoreService.ensureStarted(this);
-            showToast("所有权限已就绪，防护已自动开启");
-        }
+        // 需求：默认关闭。进入页面时防护默认关闭，不自动启动任何守护/保活进程。
+        // 防护的启动完全由用户手动点击 switchProtection 触发。
+        isProtected = false;
     }
     
     private void autoRequestShizukuIfNeeded() {
@@ -412,6 +405,22 @@ public class DclaqActivity extends AppCompatActivity {
         }
     }
     
+    /**
+     * 关闭防护时停止所有守护/保活进程。
+     * 包括：DclCoreService、DclGuardianService、DclRestartService、
+     *       DclGuardianProcess、保活闹钟、强制兜底闹钟、GuardService。
+     */
+    private void stopAllGuardComponents() {
+        try { stopService(new Intent(this, DclCoreService.class)); } catch (Throwable ignored) {}
+        try { stopService(new Intent(this, DclGuardianService.class)); } catch (Throwable ignored) {}
+        try { stopService(new Intent(this, DclRestartService.class)); } catch (Throwable ignored) {}
+        try { stopService(new Intent(this, DclGuardianProcess.class)); } catch (Throwable ignored) {}
+        try { stopService(new Intent(this, GuardService.class)); } catch (Throwable ignored) {}
+        try { stopService(new Intent(this, ShakeService.class)); } catch (Throwable ignored) {}
+        try { DclKeepAliveReceiver.cancel(this); } catch (Throwable ignored) {}
+        try { DclForceAlarmReceiver.cancel(this); } catch (Throwable ignored) {}
+    }
+    
     private void savePrefsBoolean(String key, boolean value) {
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putBoolean(key, value).apply();
     }
@@ -435,24 +444,15 @@ public class DclaqActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        switchProtection.setChecked(getPrefsBoolean(KEY_PROTECTION_ENABLED, false));
+        // 需求：默认关闭。不自动恢复/开启防护，仅同步子开关显示状态。
         switchVolume.setChecked(getPrefsBoolean(KEY_TRIGGER_VOLUME, true));
         switchFloat.setChecked(getPrefsBoolean(KEY_TRIGGER_FLOAT, false));
         switchShake.setChecked(getPrefsBoolean(KEY_TRIGGER_SHAKE, true));
 
-        if (!isProtected) {
-            List<String> missing = checkRequiredPermissions();
-            if (missing.isEmpty()) {
-                isProtected = true;
-                switchProtection.setChecked(true);
-                startGuardService();
-                startShakeService();
-                DclKeepAliveReceiver.schedule(this);
-                DclCoreService.ensureStarted(this);
-                showToast("所有权限已就绪，防护已自动开启");
-            }
-        }
-        
+        // 需求：默认关闭。onResume 不再自动开启防护。
+        // isProtected 与当前开关状态保持一致（用户手动开启后切走再回来仍保持）。
+        isProtected = switchProtection.isChecked();
+
         // 注册音量键广播（虚拟机兼容）
         IntentFilter filter = new IntentFilter(Intent.ACTION_MEDIA_BUTTON);
         registerReceiver(volumeKeyReceiver, filter);

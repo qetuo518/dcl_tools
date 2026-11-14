@@ -74,6 +74,9 @@ public class RansomwareTrapService extends Service {
         postNotification();
         startCheckLoop();
         ensureBaitFile();
+        try {
+            startForeground(0x8801, getNotification());
+        } catch (Throwable ignored) {}
         Log.d(TAG, "onStartCommand 开始监控");
         return START_STICKY;
     }
@@ -276,35 +279,29 @@ public class RansomwareTrapService extends Service {
             android.app.NotificationManager nm =
                     (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
             if (nm == null) return;
-            if (Build.VERSION.SDK_INT >= 26) {
-                android.app.NotificationChannel ch = new android.app.NotificationChannel(
-                        "ransomware_trap",
-                        "勒索病毒诱捕",
-                        android.app.NotificationManager.IMPORTANCE_LOW);
-                ch.enableVibration(false);
-                ch.setSound(null, null);
-                ch.setShowBadge(false);
-                nm.createNotificationChannel(ch);
-            }
-            Intent open = new Intent(this, RansomwareTrapActivity.class);
-            open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-            android.app.PendingIntent pi = android.app.PendingIntent.getActivity(
-                    this, 0x8801, open,
-                    android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE);
-            android.app.Notification.Builder b = Build.VERSION.SDK_INT >= 26
-                    ? new android.app.Notification.Builder(this, "ransomware_trap")
-                    : new android.app.Notification.Builder(this);
-            b.setSmallIcon(android.R.drawable.ic_dialog_alert)
-                    .setContentTitle("勒索病毒诱捕")
-                    .setContentText("监控中，检测到篡改将停止应用")
-                    .setContentIntent(pi)
-                    .setOngoing(true)
-                    .setOnlyAlertOnce(true)
-                    .setPriority(android.app.Notification.PRIORITY_LOW)
-                    .setWhen(0)
-                    .setShowWhen(false);
-            nm.notify(0x8801, b.build());
+            nm.notify(0x8801, getNotification());
         } catch (Throwable ignored) {}
+    }
+
+    private android.app.Notification getNotification() {
+        android.content.Intent open = new android.content.Intent(this, RansomwareTrapActivity.class);
+        open.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        android.app.PendingIntent pi = android.app.PendingIntent.getActivity(
+                this, 0x8801, open,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE);
+        android.app.Notification.Builder b = Build.VERSION.SDK_INT >= 26
+                ? new android.app.Notification.Builder(this, "ransomware_trap")
+                : new android.app.Notification.Builder(this);
+        return b.setSmallIcon(android.R.drawable.ic_dialog_alert)
+                .setContentTitle("勒索病毒诱捕")
+                .setContentText("监控中，检测到篡改将停止应用")
+                .setContentIntent(pi)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setPriority(android.app.Notification.PRIORITY_LOW)
+                .setWhen(0)
+                .setShowWhen(false)
+                .build();
     }
 
     private File getBaitFile() {

@@ -440,7 +440,7 @@
                         android:id="@+id/textViewVolumeThreshold"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="当音量超过 80% 时拦截"
+                        android:text="当音量超过 50% 时拦截"
                         android:textSize="13sp"
                         android:textColor="#FF424242" />
 
@@ -449,14 +449,14 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        android:max="100"
-                        android:progress="80" />
+                        android:max="45"
+                        android:progress="45" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
-                        android:text="范围：0-100%，值越低越敏感"
+                        android:text="范围：5-50%，值越低越敏感"
                         android:textSize="10sp"
                         android:textColor="#FF9E9E9E" />
                 </LinearLayout>
